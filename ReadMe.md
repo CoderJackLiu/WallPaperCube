@@ -1,6 +1,5 @@
 # WallpaperCube
 
-## Table of Contents
 <u>[English Version](#wallpapercube-english-version)</u>  |  <u>[中文版](#wallpapercube-中文版)</u>
 ---
 
