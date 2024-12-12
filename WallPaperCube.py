@@ -27,17 +27,19 @@ LANGUAGES = {
         "ready": "Ready",
         "wallpaper_set_to": "Wallpaper set to: {wallpaper}",
         "wallpaper_failed": "Failed to set wallpaper: {error}",
+        "select_language": "Select Language:"
     },
     "Chinese": {
-        "select_folder": "\u9009\u62e9\u6587\u4ef6\u5939",
-        "settings": "\u8bbe\u7f6e",
-        "wallpaper_folder": "\u58c1\u7eb8\u6587\u4ef6\u5939\uff1a",
-        "previous": "\u4e0a\u4e00\u9875",
-        "next": "\u4e0b\u4e00\u9875",
-        "page": "\u7b2c{page}\u9875",
-        "ready": "\u51c6\u5907\u5b8c\u6210",
-        "wallpaper_set_to": "\u58c1\u7eb8\u5df2\u8bbe\u7f6e\u4e3a\uff1a{wallpaper}",
-        "wallpaper_failed": "\u8bbe\u7f6e\u58c1\u7eb8\u5931\u8d25\uff1a{error}",
+        "select_folder": "选择文件夹",
+        "settings": "设置",
+        "wallpaper_folder": "壁纸文件夹：",
+        "previous": "上一页",
+        "next": "下一页",
+        "page": "第{page}页",
+        "ready": "准备完成",
+        "wallpaper_set_to": "壁纸已设置为：{wallpaper}",
+        "wallpaper_failed": "设置壁纸失败：{error}",
+        "select_language": "选择语言："
     },
 }
 
@@ -84,15 +86,17 @@ def open_settings():
     settings_window.transient(root)  # Set window on top of root
     settings_window.grab_set()  # Make it modal
 
-    Label(settings_window, text="Select Language:").pack(pady=10)
+    Label(settings_window, text=LANGUAGES[current_language.get()]["select_language"]).pack(pady=10)
     language_combobox = ttk.Combobox(
-        settings_window, values=list(LANGUAGES.keys()), state="readonly"
+        settings_window, values=["English", "中文"], state="readonly"
     )
-    language_combobox.set(current_language.get())
+    current_display_language = "中文" if current_language.get() == "Chinese" else "English"
+    language_combobox.set(current_display_language)
     language_combobox.pack(pady=10)
 
     def save_settings():
-        selected_language = language_combobox.get()
+        selected_display_language = language_combobox.get()
+        selected_language = "Chinese" if selected_display_language == "中文" else "English"
         current_language.set(selected_language)
         config["language"] = selected_language
         save_config(config)
@@ -101,7 +105,6 @@ def open_settings():
         settings_window.destroy()
 
     Button(settings_window, text="Save", command=save_settings).pack(pady=10)
-
 def set_wallpaper(image_path, status_var):
     SPI_SETDESKWALLPAPER = 20
     lang = current_language.get()
