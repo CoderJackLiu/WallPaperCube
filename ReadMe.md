@@ -1,3 +1,16 @@
+
+
+
+
+
+<!-- Tab Navigation -->
+<div id="tab-container" style="display: flex; justify-content: flex-start; border-bottom: 1px solid #ddd;">
+  <button onclick="showTab('english')" style="margin-right: 10px; cursor: pointer;">English</button>
+  <button onclick="showTab('chinese')" style="cursor: pointer;">中文</button>
+</div>
+
+<div id="english" style="display: block; padding: 10px;">
+  
 # WallpaperCube (English Version)
 
 WallpaperCube is a desktop wallpaper management application designed to enhance your experience with wallpapers. With an intuitive interface and powerful features, WallpaperCube makes it easy to organize, select, and customize your wallpapers to suit your preferences.
@@ -44,6 +57,10 @@ Thank you for using WallpaperCube! Stay tuned for exciting updates!
 
 ---
 
+</div>
+
+<div id="chinese" style="display: none; padding: 10px;">
+
 # WallpaperCube (中文版)
 
 WallpaperCube 是一个桌面壁纸管理应用程序，旨在提升您使用壁纸的体验。通过直观的界面和强大的功能，WallpaperCube 让您轻松地组织、选择和定制壁纸，以满足您的偏好。
@@ -87,4 +104,15 @@ WallpaperCube 计划发展为更全面的壁纸管理解决方案。以下是未
 
 ---
 感谢您使用 WallpaperCube！敬请期待更多令人兴奋的更新！
+
+
+</div>
+
+<script>
+function showTab(tabId) {
+  document.getElementById('english').style.display = tabId === 'english' ? 'block' : 'none';
+  document.getElementById('chinese').style.display = tabId === 'chinese' ? 'block' : 'none';
+}
+</script>
+
 
