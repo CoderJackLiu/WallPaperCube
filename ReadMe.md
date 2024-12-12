@@ -34,6 +34,11 @@ We welcome contributions to improve WallpaperCube. If you have ideas, suggestion
 ## Feedback
 Your feedback is important to us! If you encounter any issues or have feature requests, please let us know.
 
+## Screenshots
+
+### English Interface
+![English Interface](assets/WallPaper-en.jpg)
+
 ---
 Thank you for using WallpaperCube! Stay tuned for exciting updates!
 
@@ -74,6 +79,11 @@ WallpaperCube 计划发展为更全面的壁纸管理解决方案。以下是未
 
 ## 反馈
 您的反馈对我们非常重要！如果您遇到任何问题或有功能需求，请告诉我们。
+
+## 界面截图
+
+### 中文界面
+![中文界面](assets/WallPaper-zh.jpg)
 
 ---
 感谢您使用 WallpaperCube！敬请期待更多令人兴奋的更新！
