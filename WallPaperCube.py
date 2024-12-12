@@ -10,7 +10,7 @@ import hashlib
 import tkinter as tk
 import math
 
-# Config file for storing folder path
+# Config file for storing folder path and language
 CONFIG_FILE = "config.json"
 THUMBNAIL_DIR = "thumbnails"
 DEFAULT_FOLDER = os.path.expanduser("~/Pictures")
@@ -29,15 +29,15 @@ LANGUAGES = {
         "wallpaper_failed": "Failed to set wallpaper: {error}",
     },
     "Chinese": {
-        "select_folder": "选择文件夹",
-        "settings": "设置",
-        "wallpaper_folder": "壁纸文件夹：",
-        "previous": "上一页",
-        "next": "下一页",
-        "page": "第{page}页",
-        "ready": "准备完成",
-        "wallpaper_set_to": "壁纸已设置为：{wallpaper}",
-        "wallpaper_failed": "设置壁纸失败：{error}",
+        "select_folder": "\u9009\u62e9\u6587\u4ef6\u5939",
+        "settings": "\u8bbe\u7f6e",
+        "wallpaper_folder": "\u58c1\u7eb8\u6587\u4ef6\u5939\uff1a",
+        "previous": "\u4e0a\u4e00\u9875",
+        "next": "\u4e0b\u4e00\u9875",
+        "page": "\u7b2c{page}\u9875",
+        "ready": "\u51c6\u5907\u5b8c\u6210",
+        "wallpaper_set_to": "\u58c1\u7eb8\u5df2\u8bbe\u7f6e\u4e3a\uff1a{wallpaper}",
+        "wallpaper_failed": "\u8bbe\u7f6e\u58c1\u7eb8\u5931\u8d25\uff1a{error}",
     },
 }
 
@@ -57,7 +57,7 @@ def load_config():
                 return config
             except Exception as e:
                 print(f"Error loading config: {e}")
-    return {"last_folder": DEFAULT_FOLDER}
+    return {"last_folder": DEFAULT_FOLDER, "language": "English"}
 
 def update_ui_texts():
     """Update the UI texts based on the selected language."""
@@ -92,7 +92,10 @@ def open_settings():
     language_combobox.pack(pady=10)
 
     def save_settings():
-        current_language.set(language_combobox.get())
+        selected_language = language_combobox.get()
+        current_language.set(selected_language)
+        config["language"] = selected_language
+        save_config(config)
         update_ui_texts()
         display_images(folder_path.get(), scrollable_frame, current_page, images_per_page, status_var, canvas.winfo_width())
         settings_window.destroy()
@@ -173,7 +176,9 @@ def on_canvas_resize(event):
 root = Tk()
 root.title("Wallpaper Changer")
 
-current_language = StringVar(root, value="English")  # Initialize after root creation
+config = load_config()
+
+current_language = StringVar(root, value=config.get("language", "English"))  # Initialize after root creation
 
 window_width, window_height = 800, 600
 screen_width = root.winfo_screenwidth()
@@ -182,7 +187,6 @@ position_top = (screen_height // 2) - (window_height // 2)
 position_right = (screen_width // 2) - (window_width // 2)
 root.geometry(f"{window_width}x{window_height}+{position_right}+{position_top}")
 
-config = load_config()
 folder_path = StringVar(root, value=config.get("last_folder", DEFAULT_FOLDER))
 status_var = StringVar(root, value=LANGUAGES[current_language.get()]["ready"])
 current_page = tk.IntVar(root, value=0)
