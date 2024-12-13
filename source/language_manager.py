@@ -20,7 +20,11 @@ class LanguageManager:
             "general_settings": "General Settings",
             "enable_auto_switch": "Enable Auto-switch",
             "auto_switch_interval": "Switch Interval (seconds):",
-            "save_settings": "Save Settings"
+            "save_settings": "Save Settings",
+            "local_wallpapers": "Local Wallpapers",
+            "oss_wallpapers": "OSS Wallpapers",
+            "oss_not_configured": "OSS is not configured or disabled.",
+            "oss_load_failed": "Failed to load OSS images: {error}",
         },
         "Chinese": {
             "select_folder": "选择文件夹",
@@ -42,7 +46,11 @@ class LanguageManager:
             "general_settings": "通用设置",
             "enable_auto_switch": "启用自动切换",
             "auto_switch_interval": "切换间隔（秒）：",
-            "save_settings": "保存设置"
+            "save_settings": "保存设置",
+            "local_wallpapers": "本地壁纸",
+            "oss_wallpapers": "OSS 壁纸",
+            "oss_not_configured": "OSS 未配置或已禁用。",
+            "oss_load_failed": "加载 OSS 壁纸失败：{error}",
         },
     }
 

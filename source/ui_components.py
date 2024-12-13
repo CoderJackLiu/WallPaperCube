@@ -40,37 +40,29 @@ class AppUI:
                 self.oss_config["oss_endpoint"],
                 self.oss_config["oss_bucket_name"],
             )
+        # # 如果 OSS 配置不完整，提示但不影响程序启动
+        # if not self.oss.enabled:
+        #     print("OSS is not configured or disabled. Skipping OSS features.")
+
         self.setup_ui()
 
     def select_oss_folder(self):
         """加载 OSS 中的壁纸文件。"""
-        if not self.oss:
-            self.status_var.set("OSS not configured.")
+        if not self.oss.enabled:
+            self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
             return
 
         try:
             wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
-            self.display_oss_images(wallpapers)
+            self.display_oss_images(wallpapers)  # 传递获取的壁纸列表
         except Exception as e:
-            self.status_var.set(f"Failed to load from OSS: {e}")
+            error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
+            self.status_var.set(error_message)
 
-    def display_oss_images(self, wallpapers):
-        """显示 OSS 中的壁纸文件。"""
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
-
-        for index, file_name in enumerate(wallpapers):
-            img_label = Label(self.scrollable_frame, text=file_name, compound="top", bg="white")
-            img_label.grid(row=index // 5, column=index % 5, padx=10, pady=10)
-            # 使用 partial 显式绑定 file_name
-            img_label.bind("<Button-1>", partial(self.download_and_set_wallpaper, file_name))
+    from functools import partial
 
     def download_and_set_wallpaper(self, file_name, event=None):
-        """下载壁纸并设置为桌面壁纸。"""
-        if not self.oss:
-            self.status_var.set("OSS not configured.")
-            return
-
+        """下载壁纸并设置为桌面壁纸"""
         local_path = f"downloads/{file_name.split('/')[-1]}"
         try:
             self.oss.download_wallpaper(file_name, local_path)
@@ -78,7 +70,8 @@ class AppUI:
         except Exception as e:
             self.status_var.set(f"Failed to download wallpaper: {e}")
 
-    def setup_ui(self):
+    def setup_top_frame(self):
+        """设置顶部按钮栏"""
         top_frame = Frame(self.root)
         top_frame.pack(fill="x", padx=10, pady=5)
 
@@ -87,19 +80,20 @@ class AppUI:
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "select_folder"), command=self.select_folder),
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "settings"), command=self.open_settings)
         ]
-        # 确保按钮按照索引顺序正确布局
+        # 布局按钮
         self.top_buttons[0].pack(side="left", padx=5)
         self.top_buttons[1].pack(side="left", padx=5)
         self.top_buttons[2].pack(side="right", padx=5)
 
-        # 继续原有布局逻辑
+    def setup_canvas(self):
+        """设置主画布区域"""
         self.canvas_frame = Frame(self.root)
         self.canvas_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
         self.canvas = Canvas(self.canvas_frame)
         self.scrollbar = Scrollbar(self.canvas_frame, orient="vertical", command=self.canvas.yview)
 
-        self.scrollable_frame = Frame(self.canvas)  # 确保 scrollable_frame 初始化
+        self.scrollable_frame = Frame(self.canvas)  # 初始化 scrollable_frame
         self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
@@ -108,6 +102,8 @@ class AppUI:
 
         self.canvas.bind("<Configure>", self.on_canvas_resize)
 
+    def setup_pagination(self):
+        """设置底部分页按钮栏"""
         pagination_frame = Frame(self.root)
         pagination_frame.pack(fill="x", padx=10, pady=5)
 
@@ -119,42 +115,196 @@ class AppUI:
             Label(pagination_inner_frame, text=""),
             Button(pagination_inner_frame, text=LanguageManager.get_text(self.current_language.get(), "next"), command=self.next_page)
         ]
-
+        # 布局分页按钮
         self.pagination_buttons[0].pack(side="left", padx=10)
         self.page_label = self.pagination_buttons[1]
         self.page_label.pack(side="left", padx=10)
         self.pagination_buttons[2].pack(side="left", padx=10)
 
+    def setup_status_bar(self):
+        """设置底部状态栏"""
         Label(self.root, textvariable=self.status_var, relief="sunken", anchor="w").pack(side="bottom", fill="x")
-        self.display_images()
 
-    def display_images(self):
+    def setup_oss_tab(self):
+        """初始化 OSS 壁纸的 Tab"""
+        self.oss_canvas = Canvas(self.oss_tab)
+        self.oss_scrollbar = Scrollbar(self.oss_tab, orient="vertical", command=self.oss_canvas.yview)
+
+        self.oss_scrollable_frame = Frame(self.oss_canvas)
+        self.oss_canvas.create_window((0, 0), window=self.oss_scrollable_frame, anchor="nw")
+        self.oss_canvas.configure(yscrollcommand=self.oss_scrollbar.set)
+
+        self.oss_canvas.pack(side="left", fill="both", expand=True)
+        self.oss_scrollbar.pack(side="right", fill="y")
+
+        self.oss_canvas.bind("<Configure>", lambda event: self.display_oss_images())
+
+    def setup_local_tab(self):
+        """初始化本地壁纸的 Tab"""
+        self.local_canvas = Canvas(self.local_tab)
+        self.local_scrollbar = Scrollbar(self.local_tab, orient="vertical", command=self.local_canvas.yview)
+
+        self.local_scrollable_frame = Frame(self.local_canvas)
+        self.local_canvas.create_window((0, 0), window=self.local_scrollable_frame, anchor="nw")
+        self.local_canvas.configure(yscrollcommand=self.local_scrollbar.set)
+
+        self.local_canvas.pack(side="left", fill="both", expand=True)
+        self.local_scrollbar.pack(side="right", fill="y")
+
+        self.local_canvas.bind("<Configure>", lambda event: self.display_local_images())
+
+    def setup_tabs(self):
+        """设置主界面中的 tab 栏"""
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # 本地文件夹 Tab
+        self.local_tab = Frame(self.notebook)
+        self.notebook.add(self.local_tab, text=LanguageManager.get_text(self.current_language.get(), "local_wallpapers"))
+
+        # OSS 文件夹 Tab
+        self.oss_tab = Frame(self.notebook)
+        self.notebook.add(self.oss_tab, text=LanguageManager.get_text(self.current_language.get(), "oss_wallpapers"))
+
+        # 分别初始化两个 Tab 的内容
+        self.setup_local_tab()
+        self.setup_oss_tab()
+
+    def setup_ui(self):
+        """设置主界面布局"""
+        self.setup_top_frame()
+        self.setup_tabs()  # 新增方法
+        self.setup_pagination()
+        self.setup_status_bar()
+        self.display_images()  # 默认显示本地壁纸
+
+    def display_local_images(self):
+        """显示本地壁纸，支持分页和横向自适应布局"""
         folder = self.folder_path.get()
         images = ImageManager.get_images_in_folder(folder)
+
+        # 计算分页信息
         total_images = len(images)
         max_page = math.ceil(total_images / self.images_per_page) - 1
-
         if self.current_page.get() > max_page:
             self.current_page.set(max_page)
 
         start_index = self.current_page.get() * self.images_per_page
         end_index = min(start_index + self.images_per_page, total_images)
-        loaded_images = [(image_path, ImageManager.generate_thumbnail(image_path)) for image_path in images[start_index:end_index]]
+        loaded_images = images[start_index:end_index]
 
-        for widget in self.scrollable_frame.winfo_children():
+        # 清空当前布局
+        for widget in self.local_scrollable_frame.winfo_children():
             widget.destroy()
 
-        columns = max(self.canvas.winfo_width() // 120, 1)
+        # 计算列数
+        canvas_width = self.local_canvas.winfo_width()
+        if canvas_width <= 0:  # 默认列数
+            columns = 5
+        else:
+            columns = max(canvas_width // 120, 1)  # 每张图片约 120px
 
-        for index, (image_path, thumbnail) in enumerate(loaded_images):
-            img_label = Label(self.scrollable_frame, image=thumbnail, text=os.path.basename(image_path), compound="top", bg="white")
-            img_label.photo = thumbnail
-            img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
-            img_label.bind("<Button-1>", lambda event, path=image_path: self.set_wallpaper(path))
+        # 布局图片
+        for index, image_path in enumerate(loaded_images):
+            thumbnail = ImageManager.generate_thumbnail(image_path)
+            if thumbnail:
+                img_label = Label(
+                    self.local_scrollable_frame,
+                    image=thumbnail,
+                    text=os.path.basename(image_path),
+                    compound="top",
+                    bg="white"
+                )
+                img_label.photo = thumbnail  # 防止垃圾回收
+                img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
+                img_label.bind("<Button-1>", lambda event, path=image_path: self.set_wallpaper(path))
 
+        # 更新分页状态
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
 
-    def set_wallpaper(self, image_path):
+    import os
+
+    def display_oss_images(self, wallpapers=None):
+        """显示 OSS 壁纸"""
+        if not self.oss.enabled:
+            self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
+            return
+
+        if wallpapers is None:
+            try:
+                wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
+            except Exception as e:
+                error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
+                self.status_var.set(error_message)
+                return
+
+        # 创建 downloads 目录（如果不存在）
+        os.makedirs("downloads", exist_ok=True)
+
+        for widget in self.oss_scrollable_frame.winfo_children():
+            widget.destroy()
+
+        # 动态计算列数
+        canvas_width = self.oss_canvas.winfo_width()
+        columns = max(canvas_width // 120, 1) if canvas_width > 0 else 5  # 默认 5 列
+
+        for index, file_name in enumerate(wallpapers):
+            local_file_name = file_name.split("/")[-1]  # 提取文件名
+            relative_path = f"downloads/{local_file_name}"  # 相对路径
+            absolute_path = os.path.abspath(relative_path)  # 转为绝对路径
+            self.oss.download_wallpaper(file_name, relative_path)  # 下载壁纸
+            thumbnail = ImageManager.generate_thumbnail(relative_path)
+
+            if thumbnail:
+                img_label = Label(
+                    self.oss_scrollable_frame,
+                    image=thumbnail,
+                    text=local_file_name,  # 仅展示文件名
+                    compound="top",
+                    bg="white"
+                )
+                img_label.photo = thumbnail  # 防止垃圾回收
+                img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
+
+                # 使用 partial 绑定绝对路径
+                img_label.bind("<Button-1>", partial(self.set_wallpaper, absolute_path))
+
+    def display_images(self):
+        """根据激活的 Tab 显示壁纸"""
+        current_tab = self.notebook.index(self.notebook.select())
+        if current_tab == 0:  # 本地壁纸 Tab
+            self.display_local_images()
+        elif current_tab == 1:  # OSS 壁纸 Tab
+            self.display_oss_images()
+    #
+    # def display_images(self):
+    #     folder = self.folder_path.get()
+    #     images = ImageManager.get_images_in_folder(folder)
+    #     total_images = len(images)
+    #     max_page = math.ceil(total_images / self.images_per_page) - 1
+    #
+    #     if self.current_page.get() > max_page:
+    #         self.current_page.set(max_page)
+    #
+    #     start_index = self.current_page.get() * self.images_per_page
+    #     end_index = min(start_index + self.images_per_page, total_images)
+    #     loaded_images = [(image_path, ImageManager.generate_thumbnail(image_path)) for image_path in images[start_index:end_index]]
+    #
+    #     for widget in self.scrollable_frame.winfo_children():
+    #         widget.destroy()
+    #
+    #     columns = max(self.canvas.winfo_width() // 120, 1)
+    #
+    #     for index, (image_path, thumbnail) in enumerate(loaded_images):
+    #         img_label = Label(self.scrollable_frame, image=thumbnail, text=os.path.basename(image_path), compound="top", bg="white")
+    #         img_label.photo = thumbnail
+    #         img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
+    #         img_label.bind("<Button-1>", lambda event, path=image_path: self.set_wallpaper(path))
+    #
+    #     self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
+
+    def set_wallpaper(self, image_path, event=None):
+        """设置下载的壁纸为桌面壁纸"""
         success, error = WallpaperManager.set_wallpaper(image_path)
         if success:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "wallpaper_set_to", wallpaper=os.path.basename(image_path)))
@@ -330,17 +480,24 @@ class AppUI:
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
 
     def next_page(self):
+        """切换到下一页"""
         folder = self.folder_path.get()
         images = ImageManager.get_images_in_folder(folder)
         max_page = math.ceil(len(images) / self.images_per_page) - 1
         if self.current_page.get() < max_page:
             self.current_page.set(self.current_page.get() + 1)
-            self.display_images()
+            self.display_local_images()
 
     def previous_page(self):
+        """切换到上一页"""
         if self.current_page.get() > 0:
             self.current_page.set(self.current_page.get() - 1)
-            self.display_images()
+            self.display_local_images()
 
     def on_canvas_resize(self, event):
-        self.display_images()
+        """窗口大小变化时更新布局"""
+        current_tab = self.notebook.index(self.notebook.select())
+        if current_tab == 0:  # 本地壁纸 Tab
+            self.display_local_images()
+        elif current_tab == 1:  # OSS 壁纸 Tab
+            self.display_oss_images()
