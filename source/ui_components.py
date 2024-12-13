@@ -6,6 +6,8 @@ from wallpaper_manager import WallpaperManager
 import math
 from config_manager import ConfigManager
 import os
+from tkinter import Checkbutton
+
 
 class AppUI:
     def __init__(self, root, config, current_language):
@@ -21,6 +23,11 @@ class AppUI:
         self.page_label = None  # 初始化 page_label
         self.scrollable_frame = None  # 初始化 scrollable_frame
         self.setup_ui()
+        self.auto_switch_task = None  # 初始化自动切换任务变量
+        auto_switch_enabled = self.config.get("auto_switch_enabled", 0)
+        auto_switch_interval = self.config.get("auto_switch_interval", 5)
+        if auto_switch_enabled and auto_switch_interval >= 5:
+            self.start_auto_switch(auto_switch_interval)
 
     def setup_ui(self):
         top_frame = Frame(self.root)
@@ -105,6 +112,35 @@ class AppUI:
         else:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "wallpaper_failed", error=error))
 
+    def start_auto_switch(self, interval):
+        """开始自动切换壁纸功能。"""
+        self.stop_auto_switch()  # 确保不会重复启动多个定时任务
+        self.auto_switch_task = self.root.after(interval * 1000, self.auto_switch_wallpaper)
+
+    def stop_auto_switch(self):
+        """停止自动切换壁纸功能。"""
+        if hasattr(self, "auto_switch_task") and self.auto_switch_task:
+            self.root.after_cancel(self.auto_switch_task)
+            self.auto_switch_task = None
+
+    def auto_switch_wallpaper(self):
+        """自动切换到下一张壁纸。"""
+        folder = self.folder_path.get()
+        images = ImageManager.get_images_in_folder(folder)
+
+        if images:
+            # 计算当前图片的索引并切换到下一张
+            current_image_index = (self.config.get("current_image_index", -1) + 1) % len(images)
+            self.config["current_image_index"] = current_image_index
+            ConfigManager.save_config(self.config)
+
+            next_image = images[current_image_index]
+            self.set_wallpaper(next_image)
+
+        # 继续下一次切换
+        interval = self.config.get("auto_switch_interval", 5)
+        self.auto_switch_task = self.root.after(interval * 1000, self.auto_switch_wallpaper)
+
     def select_folder(self):
         folder = filedialog.askdirectory(title=LanguageManager.get_text(self.current_language.get(), "select_folder"))
         if folder:
@@ -119,27 +155,51 @@ class AppUI:
         settings_window.title(LanguageManager.get_text(self.current_language.get(), "settings"))
 
         # 将设置窗口定位到屏幕中心
-        settings_width, settings_height = 300, 150
+        settings_width, settings_height = 300, 250
         x_position = self.root.winfo_x() + (self.root.winfo_width() // 2) - (settings_width // 2)
         y_position = self.root.winfo_y() + (self.root.winfo_height() // 2) - (settings_height // 2)
         settings_window.geometry(f"{settings_width}x{settings_height}+{x_position}+{y_position}")
 
         # 设置窗口为模态窗口
-        settings_window.grab_set()  # 捕获所有事件到设置窗口
-        settings_window.transient(self.root)  # 设置为主窗口的子窗口
+        settings_window.grab_set()
+        settings_window.transient(self.root)
 
-        Label(settings_window, text=LanguageManager.get_text(self.current_language.get(), "select_language")).pack(pady=10)
+        Label(settings_window, text=LanguageManager.get_text(self.current_language.get(), "select_language")).pack(pady=5)
         language_combobox = ttk.Combobox(
             settings_window, values=["English", "Chinese"], state="readonly"
         )
         language_combobox.set(self.current_language.get())
-        language_combobox.pack(pady=10)
+        language_combobox.pack(pady=5)
+
+        # 自动切换开关
+        auto_switch_var = IntVar(value=self.config.get("auto_switch_enabled", 0))
+        Checkbutton(settings_window, text="Enable Auto-switch", variable=auto_switch_var).pack(pady=5)
+
+        # 自动切换时间间隔
+        Label(settings_window, text="Auto-switch interval (seconds):").pack(pady=5)
+        interval_var = IntVar(value=self.config.get("auto_switch_interval", 5))
+        interval_entry = ttk.Spinbox(
+            settings_window, from_=5, to=600, textvariable=interval_var, state="readonly"
+        )
+        interval_entry.pack(pady=5)
 
         def save_settings():
             selected_language = language_combobox.get()
             self.current_language.set(selected_language)
             self.config["language"] = selected_language
+
+            # 保存自动切换配置
+            self.config["auto_switch_enabled"] = auto_switch_var.get()
+            interval = interval_var.get()
+            self.config["auto_switch_interval"] = interval
             ConfigManager.save_config(self.config)
+
+            # 启用或停止自动切换逻辑
+            if auto_switch_var.get():
+                self.start_auto_switch(interval)
+            else:
+                self.stop_auto_switch()
+
             self.update_ui_texts()
             settings_window.destroy()
 
