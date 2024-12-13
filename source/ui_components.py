@@ -55,38 +55,73 @@ class AppUI:
         self.setup_ui()
 
     def select_oss_folder(self):
-        """加载 OSS 中的壁纸文件。"""
+        """加载 OSS 中的壁纸文件，并标记已下载的壁纸"""
         if not self.oss.enabled:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
             return
 
         try:
+            # 获取OSS壁纸列表
             wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
-            self.display_oss_images(wallpapers)  # 传递获取的壁纸列表
+
+            # 检查本地缓存，标记哪些壁纸已下载
+            for wallpaper in wallpapers:
+                local_file_name = wallpaper["original"].split("/")[-1]  # 访问字典的 'original' 键
+                local_path = os.path.abspath(f"downloads/{local_file_name}")
+                wallpaper["is_cached"] = os.path.exists(local_path)
+
+            # 调试输出
+            print("Wallpapers loaded from OSS with cached status:", wallpapers)
+
+            # 显示OSS壁纸
+            self.display_oss_images(wallpapers)
         except Exception as e:
             error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
             self.status_var.set(error_message)
 
-    from functools import partial
+    def _add_cached_mark(self, file_name):
+        """为已下载的壁纸动态添加右上角“✔”标记"""
+        local_file_name = file_name.split("/")[-1]
+
+        # 遍历所有组件，寻找匹配的缩略图
+        for widget in self.oss_scrollable_frame.winfo_children():
+            if isinstance(widget, Label) and widget.cget("text") == local_file_name:
+                # 确保标记只添加到对应缩略图的右上角
+                print(f"Matched widget for file: {local_file_name}")
+
+                # 检查当前缩略图是否已有标记
+                if hasattr(widget, "cached_mark") and widget.cached_mark:
+                    print(f"Mark already exists for: {local_file_name}")
+                    return  # 如果已有标记，直接返回
+
+                # 添加“✔”标记
+                cached_label = Label(widget, text="✔", fg="green", bg="white", font=("Arial", 14))
+                cached_label.place(relx=1.0, rely=0.0, anchor="ne")  # 定位在右上角
+                widget.cached_mark = cached_label  # 保存标记引用，防止重复创建
+                print(f"Added ✔ mark for: {local_file_name}")
+                return
 
     def download_and_set_wallpaper(self, file_name, event=None):
         """下载壁纸并设置为桌面壁纸"""
-        # 获取下载的完整文件路径
         local_path = os.path.abspath(f"downloads/{file_name.split('/')[-1]}")
 
         try:
-            # 检查文件是否已存在
+            # 下载壁纸
             if not os.path.exists(local_path):
-                # 如果文件不存在，则从 OSS 下载
                 self.oss.download_wallpaper(file_name, local_path)
 
-            # 应用壁纸
+            # 设置壁纸
             self.set_wallpaper(local_path)
+
+            # 更新缓存标记
+            self.root.after(0, self._add_cached_mark, file_name)
+
+            # 调试信息
+            print(f"Downloaded and marked: {file_name}")
 
             # 更新状态栏
             self.status_var.set(f"Wallpaper set: {local_path}")
         except Exception as e:
-            # 更新状态栏，显示下载错误
             self.status_var.set(f"Failed to download or set wallpaper: {e}")
 
     def setup_top_frame(self):
@@ -158,6 +193,9 @@ class AppUI:
 
         self.oss_canvas.bind("<Configure>", lambda event: self.display_oss_images())
 
+        # 首次进入时加载OSS壁纸
+        self.select_oss_folder()
+
     def setup_local_tab(self):
         """初始化本地壁纸的 Tab"""
         self.local_canvas = Canvas(self.local_tab)
@@ -197,6 +235,42 @@ class AppUI:
         self.setup_status_bar()
         self.display_images()  # 默认显示本地壁纸
 
+    def _display_images(self, images, scrollable_frame, canvas, on_click):
+        """通用图片布局方法"""
+        # 清空当前布局
+        for widget in scrollable_frame.winfo_children():
+            widget.destroy()
+
+        # 计算列数
+        canvas_width = canvas.winfo_width()
+        if canvas_width <= 0:  # 默认列数
+            columns = 5
+        else:
+            columns = max(canvas_width // 120, 1)  # 每张图片约 120px
+
+        # 布局图片
+        for index, image_info in enumerate(images):
+            thumbnail = image_info.get("thumbnail")  # 直接传入缩略图
+            if not thumbnail:
+                continue
+
+            # 创建图片Label
+            img_label = Label(
+                scrollable_frame,
+                image=thumbnail,
+                text=image_info.get("text", ""),
+                compound="top",
+                bg="white"
+            )
+            img_label.photo = thumbnail  # 防止垃圾回收
+            img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
+            img_label.bind("<Button-1>", lambda event, info=image_info: on_click(info))
+
+            # 如果壁纸已缓存，调用 _add_cached_mark 动态添加标记
+            if image_info.get("is_cached", False):
+                print(f"Adding cached mark for: {image_info['text']}")
+                self._add_cached_mark(image_info["text"])
+
     def display_local_images(self):
         """显示本地壁纸，支持分页和横向自适应布局"""
         folder = self.folder_path.get()
@@ -212,31 +286,24 @@ class AppUI:
         end_index = min(start_index + self.images_per_page, total_images)
         loaded_images = images[start_index:end_index]
 
-        # 清空当前布局
-        for widget in self.local_scrollable_frame.winfo_children():
-            widget.destroy()
-
-        # 计算列数
-        canvas_width = self.local_canvas.winfo_width()
-        if canvas_width <= 0:  # 默认列数
-            columns = 5
-        else:
-            columns = max(canvas_width // 120, 1)  # 每张图片约 120px
-
-        # 布局图片
-        for index, image_path in enumerate(loaded_images):
+        # 准备图片数据
+        image_data = []
+        for image_path in loaded_images:
             thumbnail = ImageManager.generate_thumbnail(image_path)
             if thumbnail:
-                img_label = Label(
-                    self.local_scrollable_frame,
-                    image=thumbnail,
-                    text=os.path.basename(image_path),
-                    compound="top",
-                    bg="white"
-                )
-                img_label.photo = thumbnail  # 防止垃圾回收
-                img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
-                img_label.bind("<Button-1>", lambda event, path=image_path: self.set_wallpaper(path))
+                image_data.append({
+                    "thumbnail": thumbnail,
+                    "text": os.path.basename(image_path),
+                    "path": image_path
+                })
+
+        # 使用通用方法布局图片
+        self._display_images(
+            images=image_data,
+            scrollable_frame=self.local_scrollable_frame,
+            canvas=self.local_canvas,
+            on_click=lambda info: self.set_wallpaper(info["path"])
+        )
 
         # 更新分页状态
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
@@ -267,9 +334,10 @@ class AppUI:
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
 
-            with urlopen(thumbnail_url, context=ssl_context, timeout=10) as response:  # 设置超时时间
+            with urlopen(thumbnail_url, context=ssl_context) as response:
                 img_data = response.read()
                 img = Image.open(io.BytesIO(img_data))
+                img.thumbnail((100, 100))  # 统一缩略图大小
                 img.save(cached_thumbnail_path)  # 保存到本地缓存
                 return ImageTk.PhotoImage(img)
         except Exception as e:
@@ -293,33 +361,32 @@ class AppUI:
 
     def _create_image_ui(self, index, image_info, thumbnail, columns):
         """创建图片的 UI 和标记"""
-        # 获取本地缓存路径
-        local_file_name = image_info["original"].split("/")[-1]
-        local_path = os.path.abspath(f"downloads/{local_file_name}")
-
-        # 检查是否已缓存
-        is_cached = os.path.exists(local_path)
+        local_file_name = image_info["path"].split("/")[-1]
 
         # 创建图片容器
-        img_frame = Frame(self.oss_scrollable_frame, bg="white")
+        img_frame = Frame(self.oss_scrollable_frame, bg="white", width=120, height=120)
+        img_frame.grid_propagate(False)
         img_frame.grid(row=index // columns, column=index % columns, padx=10, pady=10)
 
-        # 缩略图
+        # 图片 Label
         img_label = Label(
             img_frame,
             image=thumbnail,
             text=local_file_name,
             compound="top",
-            bg="white"
+            bg="white",
+            width=100,
+            height=100
         )
-        img_label.photo = thumbnail  # 防止垃圾回收
-        img_label.pack(side="top", padx=5, pady=5)
-        img_label.bind("<Button-1>", partial(self.download_and_set_wallpaper, image_info["original"]))
+        img_label.photo = thumbnail
+        img_label.cached_mark = None  # 初始化标记属性
+        img_label.place(relx=0.5, rely=0.5, anchor="center")
+        img_label.bind("<Button-1>", partial(self.download_and_set_wallpaper, image_info["path"]))
 
-        # 如果已缓存，添加“✔”标记
-        if is_cached:
-            cached_label = Label(img_frame, text="✔", fg="green", bg="white", font=("Arial", 12))
-            cached_label.pack(side="bottom", padx=5)
+        # 如果壁纸已缓存，显示“✔”标记
+        if image_info.get("is_cached", False):
+            print(f"Adding cached mark during UI creation for: {local_file_name}")
+            self._add_cached_mark(image_info["path"])
 
     def _process_and_display_image(self, index, image_info, columns):
         """后台处理缩略图并更新 UI"""
@@ -333,27 +400,42 @@ class AppUI:
             print(f"Error loading image {image_info['thumbnail']}: {e}")
 
     def display_oss_images(self, wallpapers=None):
-        """显示 OSS 壁纸主方法"""
+        """显示 OSS 壁纸，并在右上角标记已下载的壁纸"""
         if not self.oss.enabled:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
             return
 
         if wallpapers is None:
-            wallpapers = self._fetch_oss_wallpapers()
-            if wallpapers is None:
+            try:
+                wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
+                for wallpaper in wallpapers:
+                    local_file_name = wallpaper["original"].split("/")[-1]  # 使用 'original'
+                    local_path = os.path.abspath(f"downloads/{local_file_name}")
+                    wallpaper["is_cached"] = os.path.exists(local_path)
+            except Exception as e:
+                error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
+                self.status_var.set(error_message)
                 return
 
-        # 清空现有的图片显示区域
-        for widget in self.oss_scrollable_frame.winfo_children():
-            widget.destroy()
+        # 准备图片数据
+        image_data = []
+        for wallpaper in wallpapers:
+            thumbnail = self._fetch_thumbnail(wallpaper["thumbnail"])
+            if thumbnail:
+                image_data.append({
+                    "thumbnail": thumbnail,
+                    "text": wallpaper["original"].split("/")[-1],  # 使用 'original'
+                    "path": wallpaper["original"],
+                    "is_cached": wallpaper.get("is_cached", False)
+                })
 
-        # 动态计算列数
-        columns = self._calculate_columns()
-
-        # 使用线程池处理图片加载
-        self.executor = ThreadPoolExecutor(max_workers=10)  # 增大线程池大小
-        for index, image_info in enumerate(wallpapers):
-            self.executor.submit(self._process_and_display_image, index, image_info, columns)
+        # 使用通用方法布局图片
+        self._display_images(
+            images=image_data,
+            scrollable_frame=self.oss_scrollable_frame,
+            canvas=self.oss_canvas,
+            on_click=lambda info: self.download_and_set_wallpaper(info["path"])
+        )
 
     def display_images(self):
         """根据激活的 Tab 显示壁纸"""
