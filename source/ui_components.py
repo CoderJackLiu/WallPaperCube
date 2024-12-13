@@ -1,5 +1,5 @@
 ### ui_components.py
-from tkinter import Frame, Label, Button, Canvas, Scrollbar, filedialog, IntVar, StringVar, Toplevel, ttk
+from tkinter import Frame, Label, Button, Canvas, Scrollbar, filedialog, IntVar, StringVar, Toplevel, ttk, Checkbutton, Entry
 from language_manager import LanguageManager
 from image_manager import ImageManager
 from wallpaper_manager import WallpaperManager
@@ -7,13 +7,16 @@ import math
 from config_manager import ConfigManager
 import os
 from tkinter import Checkbutton
-
+from cloud_services.aliyun_oss import AliyunOSS
+from cloud_services.oss_config import OSSConfig
+from functools import partial
 
 class AppUI:
     def __init__(self, root, config, current_language):
         self.root = root
         self.config = config
         self.current_language = current_language
+
         self.folder_path = StringVar(root, value=config.get("last_folder", ""))
         self.status_var = StringVar(root, value=LanguageManager.get_text(current_language.get(), "ready"))
         self.current_page = IntVar(root, value=0)
@@ -22,12 +25,58 @@ class AppUI:
         self.pagination_buttons = []  # 初始化 pagination_buttons
         self.page_label = None  # 初始化 page_label
         self.scrollable_frame = None  # 初始化 scrollable_frame
-        self.setup_ui()
         self.auto_switch_task = None  # 初始化自动切换任务变量
         auto_switch_enabled = self.config.get("auto_switch_enabled", 0)
         auto_switch_interval = self.config.get("auto_switch_interval", 5)
         if auto_switch_enabled and auto_switch_interval >= 5:
             self.start_auto_switch(auto_switch_interval)
+        self.oss_config = OSSConfig.load_config()  # 加载 OSS 配置
+        self.oss = None
+
+        if self.oss_config["oss_enabled"]:
+            self.oss = AliyunOSS(
+                self.oss_config["oss_access_key_id"],
+                self.oss_config["oss_access_key_secret"],
+                self.oss_config["oss_endpoint"],
+                self.oss_config["oss_bucket_name"],
+            )
+        self.setup_ui()
+
+    def select_oss_folder(self):
+        """加载 OSS 中的壁纸文件。"""
+        if not self.oss:
+            self.status_var.set("OSS not configured.")
+            return
+
+        try:
+            wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
+            self.display_oss_images(wallpapers)
+        except Exception as e:
+            self.status_var.set(f"Failed to load from OSS: {e}")
+
+    def display_oss_images(self, wallpapers):
+        """显示 OSS 中的壁纸文件。"""
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+
+        for index, file_name in enumerate(wallpapers):
+            img_label = Label(self.scrollable_frame, text=file_name, compound="top", bg="white")
+            img_label.grid(row=index // 5, column=index % 5, padx=10, pady=10)
+            # 使用 partial 显式绑定 file_name
+            img_label.bind("<Button-1>", partial(self.download_and_set_wallpaper, file_name))
+
+    def download_and_set_wallpaper(self, file_name, event=None):
+        """下载壁纸并设置为桌面壁纸。"""
+        if not self.oss:
+            self.status_var.set("OSS not configured.")
+            return
+
+        local_path = f"downloads/{file_name.split('/')[-1]}"
+        try:
+            self.oss.download_wallpaper(file_name, local_path)
+            self.set_wallpaper(local_path)
+        except Exception as e:
+            self.status_var.set(f"Failed to download wallpaper: {e}")
 
     def setup_ui(self):
         top_frame = Frame(self.root)
@@ -150,60 +199,120 @@ class AppUI:
             self.current_page.set(0)
             self.display_images()
 
+    from tkinter import Frame, Label, Button, IntVar, StringVar, Toplevel, ttk, Entry, Checkbutton
+    def _create_general_settings(self, notebook):
+        general_frame = Frame(notebook)
+
+        # 语言选择
+        Label(general_frame, text=LanguageManager.get_text(self.current_language.get(), "select_language")).pack(pady=5)
+        language_combobox = ttk.Combobox(
+            general_frame, values=["English", "Chinese"], state="readonly"
+        )
+        language_combobox.set(self.current_language.get())
+        language_combobox.pack(pady=5)
+        self.language_combobox = language_combobox  # 存储引用以便保存时访问
+
+        # 自动切换设置
+        auto_switch_var = IntVar(value=self.config.get("auto_switch_enabled", 0))
+        Checkbutton(general_frame, text=LanguageManager.get_text(self.current_language.get(), "enable_auto_switch"), variable=auto_switch_var).pack(pady=5)
+        self.auto_switch_var = auto_switch_var  # 存储引用以便保存时访问
+
+        interval_var = IntVar(value=self.config.get("auto_switch_interval", 5))
+        Label(general_frame, text=LanguageManager.get_text(self.current_language.get(), "auto_switch_interval")).pack(pady=5)
+        interval_entry = ttk.Spinbox(
+            general_frame, from_=5, to=600, textvariable=interval_var, state="readonly"
+        )
+        interval_entry.pack(pady=5)
+        self.interval_var = interval_var  # 存储引用以便保存时访问
+
+        return general_frame
+
+    def _create_oss_settings(self, notebook):
+        oss_frame = Frame(notebook)
+
+        oss_enabled_var = IntVar(value=self.oss_config.get("oss_enabled", 0))
+        Checkbutton(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "enable_oss"), variable=oss_enabled_var).pack(pady=5)
+        self.oss_enabled_var = oss_enabled_var  # 存储引用以便保存时访问
+
+        access_key_var = StringVar(value=self.oss_config.get("oss_access_key_id", ""))
+        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "access_key_id")).pack(pady=5)
+        Entry(oss_frame, textvariable=access_key_var).pack(pady=5)
+        self.access_key_var = access_key_var
+
+        secret_key_var = StringVar(value=self.oss_config.get("oss_access_key_secret", ""))
+        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "access_key_secret")).pack(pady=5)
+        Entry(oss_frame, textvariable=secret_key_var, show="*").pack(pady=5)
+        self.secret_key_var = secret_key_var
+
+        endpoint_var = StringVar(value=self.oss_config.get("oss_endpoint", ""))
+        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "endpoint")).pack(pady=5)
+        Entry(oss_frame, textvariable=endpoint_var).pack(pady=5)
+        self.endpoint_var = endpoint_var
+
+        bucket_var = StringVar(value=self.oss_config.get("oss_bucket_name", ""))
+        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "bucket_name")).pack(pady=5)
+        Entry(oss_frame, textvariable=bucket_var).pack(pady=5)
+        self.bucket_var = bucket_var
+
+        return oss_frame
+
+    def _save_settings(self, settings_window):
+        # 保存语言设置
+        selected_language = self.language_combobox.get()
+        self.current_language.set(selected_language)
+        self.config["language"] = selected_language
+
+        # 保存 OSS 配置
+        self.oss_config.update({
+            "oss_enabled": self.oss_enabled_var.get(),
+            "oss_access_key_id": self.access_key_var.get(),
+            "oss_access_key_secret": self.secret_key_var.get(),
+            "oss_endpoint": self.endpoint_var.get(),
+            "oss_bucket_name": self.bucket_var.get(),
+        })
+        OSSConfig.save_config(self.oss_config)
+
+        # 保存通用配置
+        self.config["auto_switch_enabled"] = self.auto_switch_var.get()
+        self.config["auto_switch_interval"] = self.interval_var.get()
+        ConfigManager.save_config(self.config)
+
+        # 更新自动切换逻辑
+        if self.auto_switch_var.get():
+            self.start_auto_switch(self.interval_var.get())
+        else:
+            self.stop_auto_switch()
+
+        # 更新 UI 文本
+        self.update_ui_texts()
+        settings_window.destroy()
+
     def open_settings(self):
         settings_window = Toplevel(self.root)
         settings_window.title(LanguageManager.get_text(self.current_language.get(), "settings"))
+        settings_window.grab_set()
+        settings_window.transient(self.root)
 
-        # 将设置窗口定位到屏幕中心
-        settings_width, settings_height = 300, 250
+        # 将窗口定位到主窗口中心
+        settings_width, settings_height = 500, 400
         x_position = self.root.winfo_x() + (self.root.winfo_width() // 2) - (settings_width // 2)
         y_position = self.root.winfo_y() + (self.root.winfo_height() // 2) - (settings_height // 2)
         settings_window.geometry(f"{settings_width}x{settings_height}+{x_position}+{y_position}")
 
-        # 设置窗口为模态窗口
-        settings_window.grab_set()
-        settings_window.transient(self.root)
+        # 创建 Notebook（侧边栏选项卡）
+        notebook = ttk.Notebook(settings_window)
+        notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
-        Label(settings_window, text=LanguageManager.get_text(self.current_language.get(), "select_language")).pack(pady=5)
-        language_combobox = ttk.Combobox(
-            settings_window, values=["English", "Chinese"], state="readonly"
-        )
-        language_combobox.set(self.current_language.get())
-        language_combobox.pack(pady=5)
+        # 添加各个选项卡
+        general_frame = self._create_general_settings(notebook)
+        oss_frame = self._create_oss_settings(notebook)
 
-        # 自动切换开关
-        auto_switch_var = IntVar(value=self.config.get("auto_switch_enabled", 0))
-        Checkbutton(settings_window, text="Enable Auto-switch", variable=auto_switch_var).pack(pady=5)
+        notebook.add(general_frame, text=LanguageManager.get_text(self.current_language.get(), "general_settings"))
+        notebook.add(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "oss_settings"))
 
-        # 自动切换时间间隔
-        Label(settings_window, text="Auto-switch interval (seconds):").pack(pady=5)
-        interval_var = IntVar(value=self.config.get("auto_switch_interval", 5))
-        interval_entry = ttk.Spinbox(
-            settings_window, from_=5, to=600, textvariable=interval_var, state="readonly"
-        )
-        interval_entry.pack(pady=5)
-
-        def save_settings():
-            selected_language = language_combobox.get()
-            self.current_language.set(selected_language)
-            self.config["language"] = selected_language
-
-            # 保存自动切换配置
-            self.config["auto_switch_enabled"] = auto_switch_var.get()
-            interval = interval_var.get()
-            self.config["auto_switch_interval"] = interval
-            ConfigManager.save_config(self.config)
-
-            # 启用或停止自动切换逻辑
-            if auto_switch_var.get():
-                self.start_auto_switch(interval)
-            else:
-                self.stop_auto_switch()
-
-            self.update_ui_texts()
-            settings_window.destroy()
-
-        Button(settings_window, text="Save", command=save_settings).pack(pady=10)
+        # 保存按钮
+        Button(settings_window, text=LanguageManager.get_text(self.current_language.get(), "save_settings"), command=lambda: self._save_settings(settings_window)).pack(
+            pady=10)
 
     def update_ui_texts(self):
         self.status_var.set(LanguageManager.get_text(self.current_language.get(), "ready"))
