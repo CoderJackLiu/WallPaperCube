@@ -16,9 +16,11 @@ class AliyunOSS:
         if not self.enabled:
             raise ValueError("OSS functionality is disabled due to incomplete configuration.")
         wallpapers = []
+        endpoint_url = self.bucket.endpoint.replace("http://", "").replace("https://", "")  # 确保只包含纯域名
         for obj in oss2.ObjectIterator(self.bucket, prefix=prefix):
             if obj.key.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
-                wallpapers.append(obj.key)
+                thumbnail_url = f"https://{self.bucket.bucket_name}.{endpoint_url}/{obj.key}?x-oss-process=image/resize,w_100"
+                wallpapers.append({"original": obj.key, "thumbnail": thumbnail_url})
         return wallpapers
 
     def download_wallpaper(self, remote_file, local_path):

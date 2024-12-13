@@ -10,6 +10,14 @@ from tkinter import Checkbutton
 from cloud_services.aliyun_oss import AliyunOSS
 from cloud_services.oss_config import OSSConfig
 from functools import partial
+import threading
+from PIL import Image, ImageTk
+import io
+import ssl
+from urllib.request import urlopen
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 
 class AppUI:
     def __init__(self, root, config, current_language):
@@ -63,12 +71,23 @@ class AppUI:
 
     def download_and_set_wallpaper(self, file_name, event=None):
         """下载壁纸并设置为桌面壁纸"""
-        local_path = f"downloads/{file_name.split('/')[-1]}"
+        # 获取下载的完整文件路径
+        local_path = os.path.abspath(f"downloads/{file_name.split('/')[-1]}")
+
         try:
-            self.oss.download_wallpaper(file_name, local_path)
+            # 检查文件是否已存在
+            if not os.path.exists(local_path):
+                # 如果文件不存在，则从 OSS 下载
+                self.oss.download_wallpaper(file_name, local_path)
+
+            # 应用壁纸
             self.set_wallpaper(local_path)
+
+            # 更新状态栏
+            self.status_var.set(f"Wallpaper set: {local_path}")
         except Exception as e:
-            self.status_var.set(f"Failed to download wallpaper: {e}")
+            # 更新状态栏，显示下载错误
+            self.status_var.set(f"Failed to download or set wallpaper: {e}")
 
     def setup_top_frame(self):
         """设置顶部按钮栏"""
@@ -222,52 +241,119 @@ class AppUI:
         # 更新分页状态
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
 
-    import os
+    def _fetch_oss_wallpapers(self):
+        """从 OSS 获取壁纸列表"""
+        try:
+            return self.oss.list_wallpapers(prefix="wallpapers/")
+        except Exception as e:
+            error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
+            self.status_var.set(error_message)
+            return None
+
+    def _fetch_thumbnail(self, thumbnail_url):
+        """从远程或本地获取缩略图"""
+        try:
+            # 生成本地缓存路径
+            hashed_filename = hashlib.md5(thumbnail_url.encode()).hexdigest() + ".png"
+            cached_thumbnail_path = os.path.join("thumbnails", hashed_filename)
+
+            # 如果缓存存在，直接使用
+            if os.path.exists(cached_thumbnail_path):
+                return ImageTk.PhotoImage(Image.open(cached_thumbnail_path))
+
+            # 否则从远程下载
+            os.makedirs("thumbnails", exist_ok=True)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            with urlopen(thumbnail_url, context=ssl_context, timeout=10) as response:  # 设置超时时间
+                img_data = response.read()
+                img = Image.open(io.BytesIO(img_data))
+                img.save(cached_thumbnail_path)  # 保存到本地缓存
+                return ImageTk.PhotoImage(img)
+        except Exception as e:
+            print(f"Error fetching thumbnail: {e}")
+            return None
+
+    def _calculate_columns(self):
+        """动态计算图片列数"""
+        canvas_width = self.oss_canvas.winfo_width()
+        return max(canvas_width // 120, 1) if canvas_width > 0 else 5
+
+    def _load_and_display_image(self, index, image_info, columns):
+        """异步加载和显示单张图片"""
+        try:
+            # 调用实例方法获取缩略图
+            thumbnail = self._fetch_thumbnail(image_info["thumbnail"])
+            # UI 更新必须在主线程中完成
+            threading.Thread(target=self._create_image_ui, args=(index, image_info, thumbnail, columns)).start()
+        except Exception as e:
+            print(f"Error loading image {image_info['thumbnail']}: {e}")
+
+    def _create_image_ui(self, index, image_info, thumbnail, columns):
+        """创建图片的 UI 和标记"""
+        # 获取本地缓存路径
+        local_file_name = image_info["original"].split("/")[-1]
+        local_path = os.path.abspath(f"downloads/{local_file_name}")
+
+        # 检查是否已缓存
+        is_cached = os.path.exists(local_path)
+
+        # 创建图片容器
+        img_frame = Frame(self.oss_scrollable_frame, bg="white")
+        img_frame.grid(row=index // columns, column=index % columns, padx=10, pady=10)
+
+        # 缩略图
+        img_label = Label(
+            img_frame,
+            image=thumbnail,
+            text=local_file_name,
+            compound="top",
+            bg="white"
+        )
+        img_label.photo = thumbnail  # 防止垃圾回收
+        img_label.pack(side="top", padx=5, pady=5)
+        img_label.bind("<Button-1>", partial(self.download_and_set_wallpaper, image_info["original"]))
+
+        # 如果已缓存，添加“✔”标记
+        if is_cached:
+            cached_label = Label(img_frame, text="✔", fg="green", bg="white", font=("Arial", 12))
+            cached_label.pack(side="bottom", padx=5)
+
+    def _process_and_display_image(self, index, image_info, columns):
+        """后台处理缩略图并更新 UI"""
+        try:
+            # 调用实例方法获取缩略图
+            thumbnail = self._fetch_thumbnail(image_info["thumbnail"])
+
+            # UI 更新必须在主线程中完成
+            self.root.after(0, self._create_image_ui, index, image_info, thumbnail, columns)
+        except Exception as e:
+            print(f"Error loading image {image_info['thumbnail']}: {e}")
 
     def display_oss_images(self, wallpapers=None):
-        """显示 OSS 壁纸"""
+        """显示 OSS 壁纸主方法"""
         if not self.oss.enabled:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
             return
 
         if wallpapers is None:
-            try:
-                wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
-            except Exception as e:
-                error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
-                self.status_var.set(error_message)
+            wallpapers = self._fetch_oss_wallpapers()
+            if wallpapers is None:
                 return
 
-        # 创建 downloads 目录（如果不存在）
-        os.makedirs("downloads", exist_ok=True)
-
+        # 清空现有的图片显示区域
         for widget in self.oss_scrollable_frame.winfo_children():
             widget.destroy()
 
         # 动态计算列数
-        canvas_width = self.oss_canvas.winfo_width()
-        columns = max(canvas_width // 120, 1) if canvas_width > 0 else 5  # 默认 5 列
+        columns = self._calculate_columns()
 
-        for index, file_name in enumerate(wallpapers):
-            local_file_name = file_name.split("/")[-1]  # 提取文件名
-            relative_path = f"downloads/{local_file_name}"  # 相对路径
-            absolute_path = os.path.abspath(relative_path)  # 转为绝对路径
-            self.oss.download_wallpaper(file_name, relative_path)  # 下载壁纸
-            thumbnail = ImageManager.generate_thumbnail(relative_path)
-
-            if thumbnail:
-                img_label = Label(
-                    self.oss_scrollable_frame,
-                    image=thumbnail,
-                    text=local_file_name,  # 仅展示文件名
-                    compound="top",
-                    bg="white"
-                )
-                img_label.photo = thumbnail  # 防止垃圾回收
-                img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
-
-                # 使用 partial 绑定绝对路径
-                img_label.bind("<Button-1>", partial(self.set_wallpaper, absolute_path))
+        # 使用线程池处理图片加载
+        self.executor = ThreadPoolExecutor(max_workers=10)  # 增大线程池大小
+        for index, image_info in enumerate(wallpapers):
+            self.executor.submit(self._process_and_display_image, index, image_info, columns)
 
     def display_images(self):
         """根据激活的 Tab 显示壁纸"""
@@ -276,32 +362,6 @@ class AppUI:
             self.display_local_images()
         elif current_tab == 1:  # OSS 壁纸 Tab
             self.display_oss_images()
-    #
-    # def display_images(self):
-    #     folder = self.folder_path.get()
-    #     images = ImageManager.get_images_in_folder(folder)
-    #     total_images = len(images)
-    #     max_page = math.ceil(total_images / self.images_per_page) - 1
-    #
-    #     if self.current_page.get() > max_page:
-    #         self.current_page.set(max_page)
-    #
-    #     start_index = self.current_page.get() * self.images_per_page
-    #     end_index = min(start_index + self.images_per_page, total_images)
-    #     loaded_images = [(image_path, ImageManager.generate_thumbnail(image_path)) for image_path in images[start_index:end_index]]
-    #
-    #     for widget in self.scrollable_frame.winfo_children():
-    #         widget.destroy()
-    #
-    #     columns = max(self.canvas.winfo_width() // 120, 1)
-    #
-    #     for index, (image_path, thumbnail) in enumerate(loaded_images):
-    #         img_label = Label(self.scrollable_frame, image=thumbnail, text=os.path.basename(image_path), compound="top", bg="white")
-    #         img_label.photo = thumbnail
-    #         img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
-    #         img_label.bind("<Button-1>", lambda event, path=image_path: self.set_wallpaper(path))
-    #
-    #     self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
 
     def set_wallpaper(self, image_path, event=None):
         """设置下载的壁纸为桌面壁纸"""
