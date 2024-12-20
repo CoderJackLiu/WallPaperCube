@@ -99,9 +99,9 @@ class SettingsUI:
 
         # 更新自动切换逻辑
         if self.auto_switch_var.get():
-            self.app_ui_instance.start_auto_switch(self.interval_var.get())
+            self.app_ui_instance.auto_switcher.start_auto_switch(self.interval_var.get())
         else:
-            self.app_ui_instance.stop_auto_switch()
+            self.app_ui_instance.auto_switcher.stop_auto_switch()
 
         # 更新 UI 文本
         self.app_ui_instance.update_ui_texts()

@@ -19,6 +19,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from settings_ui import SettingsUI  # 导入拆分后的设置界面逻辑
+from auto_switcher import AutoSwitcher
 
 class AppUI:
     def __init__(self, root, config, current_language):
@@ -35,10 +36,16 @@ class AppUI:
         self.page_label = None  # 初始化 page_label
         self.scrollable_frame = None  # 初始化 scrollable_frame
         self.auto_switch_task = None  # 初始化自动切换任务变量
+        self.auto_switcher = AutoSwitcher(
+            root=self.root,
+            config=self.config,
+            folder_path_var=self.folder_path,
+            status_var=self.status_var
+        )
         auto_switch_enabled = self.config.get("auto_switch_enabled", 0)
         auto_switch_interval = self.config.get("auto_switch_interval", 5)
         if auto_switch_enabled and auto_switch_interval >= 5:
-            self.start_auto_switch(auto_switch_interval)
+            self.auto_switcher.start_auto_switch(auto_switch_interval)
         self.oss_config = OSSConfig.load_config()  # 加载 OSS 配置
         self.oss = None
 
@@ -453,35 +460,6 @@ class AppUI:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "wallpaper_set_to", wallpaper=os.path.basename(image_path)))
         else:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "wallpaper_failed", error=error))
-
-    def start_auto_switch(self, interval):
-        """开始自动切换壁纸功能。"""
-        self.stop_auto_switch()  # 确保不会重复启动多个定时任务
-        self.auto_switch_task = self.root.after(interval * 1000, self.auto_switch_wallpaper)
-
-    def stop_auto_switch(self):
-        """停止自动切换壁纸功能。"""
-        if hasattr(self, "auto_switch_task") and self.auto_switch_task:
-            self.root.after_cancel(self.auto_switch_task)
-            self.auto_switch_task = None
-
-    def auto_switch_wallpaper(self):
-        """自动切换到下一张壁纸。"""
-        folder = self.folder_path.get()
-        images = ImageManager.get_images_in_folder(folder)
-
-        if images:
-            # 计算当前图片的索引并切换到下一张
-            current_image_index = (self.config.get("current_image_index", -1) + 1) % len(images)
-            self.config["current_image_index"] = current_image_index
-            ConfigManager.save_config(self.config)
-
-            next_image = images[current_image_index]
-            self.set_wallpaper(next_image)
-
-        # 继续下一次切换
-        interval = self.config.get("auto_switch_interval", 5)
-        self.auto_switch_task = self.root.after(interval * 1000, self.auto_switch_wallpaper)
 
     def select_folder(self):
         folder = filedialog.askdirectory(title=LanguageManager.get_text(self.current_language.get(), "select_folder"))
