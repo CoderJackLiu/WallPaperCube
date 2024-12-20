@@ -10,3 +10,4 @@ source/oss_config.json
 /source/cloud_services/__pycache__
 /.idea
 source/config.json
+/source/UI/__pycache__
