@@ -8,3 +8,4 @@
 source/oss_config.json
 /source/__pycache__
 /source/cloud_services/__pycache__
+/.idea
