@@ -18,6 +18,7 @@ from urllib.request import urlopen
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+from settings_ui import SettingsUI  # 导入拆分后的设置界面逻辑
 
 class AppUI:
     def __init__(self, root, config, current_language):
@@ -235,7 +236,7 @@ class AppUI:
         self.setup_status_bar()
         self.display_images()  # 默认显示本地壁纸
 
-    def _display_images(self, images, scrollable_frame, canvas, on_click):
+    def show_images(self, images, scrollable_frame, canvas, on_click):
         """通用图片布局方法"""
         # 清空当前布局
         for widget in scrollable_frame.winfo_children():
@@ -298,7 +299,7 @@ class AppUI:
                 })
 
         # 使用通用方法布局图片
-        self._display_images(
+        self.show_images(
             images=image_data,
             scrollable_frame=self.local_scrollable_frame,
             canvas=self.local_canvas,
@@ -430,7 +431,7 @@ class AppUI:
                 })
 
         # 使用通用方法布局图片
-        self._display_images(
+        self.show_images(
             images=image_data,
             scrollable_frame=self.oss_scrollable_frame,
             canvas=self.oss_canvas,
@@ -491,122 +492,13 @@ class AppUI:
             self.current_page.set(0)
             self.display_images()
 
-    from tkinter import Frame, Label, Button, IntVar, StringVar, Toplevel, ttk, Entry, Checkbutton
-    def _create_general_settings(self, notebook):
-        general_frame = Frame(notebook)
-
-        # 语言选择
-        Label(general_frame, text=LanguageManager.get_text(self.current_language.get(), "select_language")).pack(pady=5)
-        language_combobox = ttk.Combobox(
-            general_frame, values=["English", "Chinese"], state="readonly"
-        )
-        language_combobox.set(self.current_language.get())
-        language_combobox.pack(pady=5)
-        self.language_combobox = language_combobox  # 存储引用以便保存时访问
-
-        # 自动切换设置
-        auto_switch_var = IntVar(value=self.config.get("auto_switch_enabled", 0))
-        Checkbutton(general_frame, text=LanguageManager.get_text(self.current_language.get(), "enable_auto_switch"), variable=auto_switch_var).pack(pady=5)
-        self.auto_switch_var = auto_switch_var  # 存储引用以便保存时访问
-
-        interval_var = IntVar(value=self.config.get("auto_switch_interval", 5))
-        Label(general_frame, text=LanguageManager.get_text(self.current_language.get(), "auto_switch_interval")).pack(pady=5)
-        interval_entry = ttk.Spinbox(
-            general_frame, from_=5, to=600, textvariable=interval_var, state="readonly"
-        )
-        interval_entry.pack(pady=5)
-        self.interval_var = interval_var  # 存储引用以便保存时访问
-
-        return general_frame
-
-    def _create_oss_settings(self, notebook):
-        oss_frame = Frame(notebook)
-
-        oss_enabled_var = IntVar(value=self.oss_config.get("oss_enabled", 0))
-        Checkbutton(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "enable_oss"), variable=oss_enabled_var).pack(pady=5)
-        self.oss_enabled_var = oss_enabled_var  # 存储引用以便保存时访问
-
-        access_key_var = StringVar(value=self.oss_config.get("oss_access_key_id", ""))
-        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "access_key_id")).pack(pady=5)
-        Entry(oss_frame, textvariable=access_key_var).pack(pady=5)
-        self.access_key_var = access_key_var
-
-        secret_key_var = StringVar(value=self.oss_config.get("oss_access_key_secret", ""))
-        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "access_key_secret")).pack(pady=5)
-        Entry(oss_frame, textvariable=secret_key_var, show="*").pack(pady=5)
-        self.secret_key_var = secret_key_var
-
-        endpoint_var = StringVar(value=self.oss_config.get("oss_endpoint", ""))
-        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "endpoint")).pack(pady=5)
-        Entry(oss_frame, textvariable=endpoint_var).pack(pady=5)
-        self.endpoint_var = endpoint_var
-
-        bucket_var = StringVar(value=self.oss_config.get("oss_bucket_name", ""))
-        Label(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "bucket_name")).pack(pady=5)
-        Entry(oss_frame, textvariable=bucket_var).pack(pady=5)
-        self.bucket_var = bucket_var
-
-        return oss_frame
-
-    def _save_settings(self, settings_window):
-        # 保存语言设置
-        selected_language = self.language_combobox.get()
-        self.current_language.set(selected_language)
-        self.config["language"] = selected_language
-
-        # 保存 OSS 配置
-        self.oss_config.update({
-            "oss_enabled": self.oss_enabled_var.get(),
-            "oss_access_key_id": self.access_key_var.get(),
-            "oss_access_key_secret": self.secret_key_var.get(),
-            "oss_endpoint": self.endpoint_var.get(),
-            "oss_bucket_name": self.bucket_var.get(),
-        })
-        OSSConfig.save_config(self.oss_config)
-
-        # 保存通用配置
-        self.config["auto_switch_enabled"] = self.auto_switch_var.get()
-        self.config["auto_switch_interval"] = self.interval_var.get()
-        ConfigManager.save_config(self.config)
-
-        # 更新自动切换逻辑
-        if self.auto_switch_var.get():
-            self.start_auto_switch(self.interval_var.get())
-        else:
-            self.stop_auto_switch()
-
-        # 更新 UI 文本
-        self.update_ui_texts()
-        settings_window.destroy()
 
     def open_settings(self):
-        settings_window = Toplevel(self.root)
-        settings_window.title(LanguageManager.get_text(self.current_language.get(), "settings"))
-        settings_window.grab_set()
-        settings_window.transient(self.root)
-
-        # 将窗口定位到主窗口中心
-        settings_width, settings_height = 500, 400
-        x_position = self.root.winfo_x() + (self.root.winfo_width() // 2) - (settings_width // 2)
-        y_position = self.root.winfo_y() + (self.root.winfo_height() // 2) - (settings_height // 2)
-        settings_window.geometry(f"{settings_width}x{settings_height}+{x_position}+{y_position}")
-
-        # 创建 Notebook（侧边栏选项卡）
-        notebook = ttk.Notebook(settings_window)
-        notebook.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # 添加各个选项卡
-        general_frame = self._create_general_settings(notebook)
-        oss_frame = self._create_oss_settings(notebook)
-
-        notebook.add(general_frame, text=LanguageManager.get_text(self.current_language.get(), "general_settings"))
-        notebook.add(oss_frame, text=LanguageManager.get_text(self.current_language.get(), "oss_settings"))
-
-        # 保存按钮
-        Button(settings_window, text=LanguageManager.get_text(self.current_language.get(), "save_settings"), command=lambda: self._save_settings(settings_window)).pack(
-            pady=10)
+        settings_ui = SettingsUI(self.root, self.config, self.current_language, self)
+        settings_ui.open_settings_window()
 
     def update_ui_texts(self):
+        # 更新状态栏
         self.status_var.set(LanguageManager.get_text(self.current_language.get(), "ready"))
 
         # 更新顶部按钮
@@ -620,6 +512,11 @@ class AppUI:
 
         # 更新页面标签
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
+
+        # 更新 Tab 标签
+        self.notebook.tab(0, text=LanguageManager.get_text(self.current_language.get(), "local_wallpapers"))
+        self.notebook.tab(1, text=LanguageManager.get_text(self.current_language.get(), "oss_wallpapers"))
+
 
     def next_page(self):
         """切换到下一页"""
