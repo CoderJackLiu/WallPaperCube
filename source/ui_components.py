@@ -63,6 +63,9 @@ class AppUI:
         self.setup_ui()
 
     def select_oss_folder(self):
+        if not self.oss:
+            self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
+            return
         """加载 OSS 中的壁纸文件，并标记已下载的壁纸"""
         if not self.oss.enabled:
             self.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))

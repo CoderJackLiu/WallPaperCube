@@ -1,5 +1,8 @@
+import os
+
 import oss2
 
+OSS_WALLPAPER_DIR = "downloads"
 
 class AliyunOSS:
     def __init__(self, access_key_id, access_key_secret, endpoint, bucket_name):
@@ -26,4 +29,7 @@ class AliyunOSS:
     def download_wallpaper(self, remote_file, local_path):
         if not self.enabled:
             raise ValueError("OSS functionality is disabled due to incomplete configuration.")
+
+        if not os.path.exists(OSS_WALLPAPER_DIR):
+            os.makedirs(OSS_WALLPAPER_DIR)
         self.bucket.get_object_to_file(remote_file, local_path)
