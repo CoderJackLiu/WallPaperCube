@@ -1,6 +1,11 @@
+import hashlib
+import io
 import os
+import ssl
+from urllib.request import urlopen
 
 import oss2
+from PIL import ImageTk, Image
 
 OSS_WALLPAPER_DIR = "downloads"
 
@@ -33,3 +38,30 @@ class AliyunOSS:
         if not os.path.exists(OSS_WALLPAPER_DIR):
             os.makedirs(OSS_WALLPAPER_DIR)
         self.bucket.get_object_to_file(remote_file, local_path)
+
+    def fetch_thumbnail(self, thumbnail_url):
+        """从远程或本地获取缩略图"""
+        try:
+            # 生成本地缓存路径
+            hashed_filename = hashlib.md5(thumbnail_url.encode()).hexdigest() + ".png"
+            cached_thumbnail_path = os.path.join("thumbnails", hashed_filename)
+
+            # 如果缓存存在，直接使用
+            if os.path.exists(cached_thumbnail_path):
+                return ImageTk.PhotoImage(Image.open(cached_thumbnail_path))
+
+            # 否则从远程下载
+            os.makedirs("thumbnails", exist_ok=True)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            with urlopen(thumbnail_url, context=ssl_context) as response:
+                img_data = response.read()
+                img = Image.open(io.BytesIO(img_data))
+                img.thumbnail((100, 100))  # 统一缩略图大小
+                img.save(cached_thumbnail_path)  # 保存到本地缓存
+                return ImageTk.PhotoImage(img)
+        except Exception as e:
+            print(f"Error fetching thumbnail: {e}")
+            return None

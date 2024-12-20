@@ -319,42 +319,6 @@ class AppUI:
         # 更新分页状态
         self.page_label.config(text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page.get() + 1))
 
-    def _fetch_oss_wallpapers(self):
-        """从 OSS 获取壁纸列表"""
-        try:
-            return self.oss.list_wallpapers(prefix="wallpapers/")
-        except Exception as e:
-            error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
-            self.status_var.set(error_message)
-            return None
-
-    def _fetch_thumbnail(self, thumbnail_url):
-        """从远程或本地获取缩略图"""
-        try:
-            # 生成本地缓存路径
-            hashed_filename = hashlib.md5(thumbnail_url.encode()).hexdigest() + ".png"
-            cached_thumbnail_path = os.path.join("thumbnails", hashed_filename)
-
-            # 如果缓存存在，直接使用
-            if os.path.exists(cached_thumbnail_path):
-                return ImageTk.PhotoImage(Image.open(cached_thumbnail_path))
-
-            # 否则从远程下载
-            os.makedirs("thumbnails", exist_ok=True)
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            with urlopen(thumbnail_url, context=ssl_context) as response:
-                img_data = response.read()
-                img = Image.open(io.BytesIO(img_data))
-                img.thumbnail((100, 100))  # 统一缩略图大小
-                img.save(cached_thumbnail_path)  # 保存到本地缓存
-                return ImageTk.PhotoImage(img)
-        except Exception as e:
-            print(f"Error fetching thumbnail: {e}")
-            return None
-
     def _calculate_columns(self):
         """动态计算图片列数"""
         canvas_width = self.oss_canvas.winfo_width()
@@ -364,7 +328,7 @@ class AppUI:
         """异步加载和显示单张图片"""
         try:
             # 调用实例方法获取缩略图
-            thumbnail = self._fetch_thumbnail(image_info["thumbnail"])
+            thumbnail = self.oss.fetch_thumbnail(image_info["thumbnail"])
             # UI 更新必须在主线程中完成
             threading.Thread(target=self._create_image_ui, args=(index, image_info, thumbnail, columns)).start()
         except Exception as e:
@@ -403,7 +367,7 @@ class AppUI:
         """后台处理缩略图并更新 UI"""
         try:
             # 调用实例方法获取缩略图
-            thumbnail = self._fetch_thumbnail(image_info["thumbnail"])
+            thumbnail = self.oss.fetch_thumbnail(image_info["thumbnail"])
 
             # UI 更新必须在主线程中完成
             self.root.after(0, self._create_image_ui, index, image_info, thumbnail, columns)
@@ -431,7 +395,7 @@ class AppUI:
         # 准备图片数据
         image_data = []
         for wallpaper in wallpapers:
-            thumbnail = self._fetch_thumbnail(wallpaper["thumbnail"])
+            thumbnail = self.oss.fetch_thumbnail(wallpaper["thumbnail"])
             if thumbnail:
                 image_data.append({
                     "thumbnail": thumbnail,
