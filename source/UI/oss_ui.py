@@ -3,8 +3,10 @@ import os
 from tkinter import Frame, Label, Canvas, Scrollbar, Button
 from source.language_manager import LanguageManager
 
+
 class OSSUIHandler:
     def __init__(self, root, oss, status_var, current_language, uiInstance):
+        self.uid = None
         self.oss_images = None
         self.root = root
         self.oss = oss
@@ -80,7 +82,10 @@ class OSSUIHandler:
 
         if wallpapers is None:
             try:
-                wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
+                if not self.uid:
+                    wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
+                else:
+                    wallpapers = self.oss.list_wallpapers(prefix=f"wallpapers/{self.uid}/")
                 self.oss_images = wallpapers  # 初始化 oss_images
                 for wallpaper in wallpapers:
                     local_file_name = wallpaper["original"].split("/")[-1]
@@ -200,3 +205,7 @@ class OSSUIHandler:
         self.next_button.config(
             text=LanguageManager.get_text(self.current_language.get(), "next")
         )
+
+    def update_uid(self, param):
+        self.uid = param
+        self.display_oss_images()

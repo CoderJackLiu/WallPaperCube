@@ -1,5 +1,11 @@
 ### ui_components.py
+import binascii
+import json
+import webbrowser
 from tkinter import Frame, Label, Button, Canvas, filedialog, IntVar, StringVar, ttk
+
+import requests
+
 from language_manager import LanguageManager
 from wallpaper_manager import WallpaperManager
 from config_manager import ConfigManager
@@ -10,7 +16,7 @@ from settings_ui import SettingsUI  # 导入拆分后的设置界面逻辑
 from auto_switcher import AutoSwitcher
 from UI.oss_ui import OSSUIHandler
 from UI.local_image_manager import LocalImageManager
-
+from Auth.github_auth import GitHubAuth
 class AppUI:
     def __init__(self, root, config, current_language):
         self.oss_page_label = None
@@ -20,7 +26,7 @@ class AppUI:
         self.root = root
         self.config = config
         self.current_language = current_language
-
+        self.github_auth = GitHubAuth()  # 初始化 GitHub 鉴权模块
         self.folder_path = StringVar(root, value=config.get("last_folder", ""))
         self.status_var = StringVar(root, value=LanguageManager.get_text(current_language.get(), "ready"))
         self.current_page = IntVar(root, value=0)
@@ -69,6 +75,8 @@ class AppUI:
             Label(top_frame, text=LanguageManager.get_text(self.current_language.get(), "wallpaper_folder")),
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "select_folder"),
                    command=self.select_folder),
+            Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "login"),
+                   command=self.github_login),
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "settings"),
                    command=self.open_settings)
         ]
@@ -76,6 +84,7 @@ class AppUI:
         self.top_buttons[0].pack(side="left", padx=5)
         self.top_buttons[1].pack(side="left", padx=5)
         self.top_buttons[2].pack(side="right", padx=5)
+        self.top_buttons[3].pack(side="right", padx=5)
 
     def setup_pagination(self):
         """设置底部分页按钮栏"""
@@ -238,6 +247,27 @@ class AppUI:
         settings_ui = SettingsUI(self.root, self.config, self.current_language, self)
         settings_ui.open_settings_window()
 
+    def github_login(self):
+        """触发 GitHub 登录流程"""
+        self.status_var.set("正在登录，请完成 GitHub 授权...")
+
+        try:
+            user_info = self.github_auth.login()
+            self.user_info = user_info
+            self.status_var.set(f"登录成功，用户名: {user_info['username']}")
+            self.save_user_info(user_info)
+            # self.load_wallpapers(user_info["id"])
+            self.oss_ui_handler.update_uid(user_info["id"])
+        except Exception as e:
+            self.status_var.set(f"登录失败: {e}")
+
+    def save_user_info(self, user_info):
+        """保存用户信息到本地文件"""
+        with open("user_info.json", "w") as file:
+            json.dump(user_info, file)
+
+        print("用户信息已保存到本地")
+
     def update_ui_texts(self):
         # 更新状态栏
         self.status_var.set(LanguageManager.get_text(self.current_language.get(), "ready"))
@@ -259,3 +289,8 @@ class AppUI:
     def on_canvas_resize(self, event):
         """窗口大小变化时更新布局"""
         self.display_local_images()
+
+    def save_user_id(self, user_id):
+        """保存用户 ID 到本地"""
+        with open("user_id.txt", "w") as file:
+            file.write(str(user_id))
