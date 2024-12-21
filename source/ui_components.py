@@ -228,6 +228,7 @@ class AppUI:
         folder = filedialog.askdirectory(title=LanguageManager.get_text(self.current_language.get(), "select_folder"))
         if folder:
             self.folder_path.set(folder)
+            self.local_image_manager.set_folder(folder)
             self.config["last_folder"] = folder
             ConfigManager.save_config(self.config)
             self.current_page.set(0)

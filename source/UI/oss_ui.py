@@ -144,31 +144,32 @@ class OSSUIHandler:
         pagination_frame = Frame(parent_frame)
 
         # 创建上一页按钮
-        previous_button = Button(
-            pagination_frame, text="Previous",
+        self.previous_button = Button(
+            pagination_frame, text=LanguageManager.get_text(self.current_language.get(), "previous"),
             command=lambda: self.previous_page_and_update(update_callback)
         )
 
         # 创建页码标签
-        page_label = Label(
-            pagination_frame, text=f"Page {self.current_page + 1}"
+        self.page_label = Label(
+            pagination_frame,
+            text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page + 1)
         )
 
         # 创建下一页按钮
-        next_button = Button(
-            pagination_frame, text="Next",
+        self.next_button = Button(
+            pagination_frame, text=LanguageManager.get_text(self.current_language.get(), "next"),
             command=lambda: self.next_page_and_update(update_callback)
         )
 
         # 使用 grid 布局居中
-        previous_button.grid(row=0, column=0, padx=10)
-        page_label.grid(row=0, column=1, padx=0)
-        next_button.grid(row=0, column=2, padx=10)
+        self.previous_button.grid(row=0, column=0, padx=10)
+        self.page_label.grid(row=0, column=1, padx=0)
+        self.next_button.grid(row=0, column=2, padx=10)
 
         # 在父容器中居中显示分页框
         pagination_frame.pack(anchor="center", pady=10)
 
-        return pagination_frame, page_label
+        return pagination_frame, self.page_label
 
     def next_page_and_update(self, update_callback):
         """切换到下一页并更新显示"""
@@ -187,4 +188,15 @@ class OSSUIHandler:
         self.display_oss_images()
 
     def update_ui_texts(self, current_language):
-        pass
+        self.current_language = current_language
+        self.page_label.config(
+            text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page + 1)
+        )
+        # 更新self.previous_button的文本
+        self.previous_button.config(
+            text=LanguageManager.get_text(self.current_language.get(), "previous")
+        )
+        # 更新self.next_button的文本
+        self.next_button.config(
+            text=LanguageManager.get_text(self.current_language.get(), "next")
+        )
