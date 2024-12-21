@@ -1,9 +1,7 @@
 import math
 import os
 from tkinter import Frame, Label, Canvas, Scrollbar, Button
-
 from source.language_manager import LanguageManager
-
 
 class OSSUIHandler:
     def __init__(self, root, oss, status_var, current_language, uiInstance):
@@ -25,27 +23,12 @@ class OSSUIHandler:
         total_images = len(self.oss_images)  # 假设 oss_images 包含所有壁纸数据
         return math.ceil(total_images / self.uiInstance.images_per_page)
 
-    def setup_oss_ui(self, parent_frame):
-        """初始化 OSS 的 UI"""
-        self.oss_canvas = Canvas(parent_frame)
-        self.oss_scrollbar = Scrollbar(parent_frame, orient="vertical", command=self.oss_canvas.yview)
-
-        self.oss_scrollable_frame = Frame(self.oss_canvas)
-        self.oss_canvas.create_window((0, 0), window=self.oss_scrollable_frame, anchor="nw")
-        self.oss_canvas.configure(yscrollcommand=self.oss_scrollbar.set)
-        # self.oss_canvas.bind("<Configure>", self.uiInstance.on_canvas_resize)
-
-        self.oss_canvas.pack(side="left", fill="both", expand=True)
-        self.oss_scrollbar.pack(side="right", fill="y")
-
-        self.oss_canvas.bind("<Configure>", lambda event: self.display_oss_images())
-
     def _add_cached_mark(self, file_name):
         """为已下载的壁纸动态添加右上角“✔”标记"""
         local_file_name = file_name.split("/")[-1]
 
         # 遍历所有组件，寻找匹配的缩略图
-        for widget in self.uiInstance.oss_ui_handler.oss_scrollable_frame.winfo_children():
+        for widget in self.oss_scrollable_frame.winfo_children():
             if isinstance(widget, Label) and widget.cget("text") == local_file_name:
                 # 确保标记只添加到对应缩略图的右上角
                 print(f"Matched widget for file: {local_file_name}")
@@ -88,94 +71,6 @@ class OSSUIHandler:
             # self.uiInstance.status_var.set(f"Wallpaper set: {local_path}")
         except Exception as e:
             self.uiInstance.status_var.set(f"Failed to download or set wallpaper: {e}")
-
-    # def display_oss_images(self):
-    #     """显示 OSS 壁纸"""
-    #     images = self.fetch_images_for_current_page()  # 分页获取数据
-    #
-    #     # 清空 UI 并显示图片
-    #     self.clear_scrollable_frame()
-    #     self.uiInstance.show_images(images)
-    #
-    #     # 更新页码显示
-    #     if self.page_label:
-    #         self.page_label.config(text=f"Page {self.current_page + 1}")
-
-    # def display_oss_images(self, wallpapers=None):
-    #     """显示 OSS 壁纸，并在右上角标记已下载的壁纸"""
-    #     if not self.oss.enabled:
-    #         self.uiInstance.status_var.set(LanguageManager.get_text(self.current_language.get(), "oss_not_configured"))
-    #         return
-    #
-    #     if wallpapers is None:
-    #         try:
-    #             wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
-    #             for wallpaper in wallpapers:
-    #                 local_file_name = wallpaper["original"].split("/")[-1]  # 使用 'original'
-    #                 local_path = os.path.abspath(f"downloads/{local_file_name}")
-    #                 wallpaper["is_cached"] = os.path.exists(local_path)
-    #         except Exception as e:
-    #             error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
-    #             self.uiInstance.status_var.set(error_message)
-    #             return
-    #
-    #     # 准备图片数据
-    #     image_data = []
-    #     for wallpaper in wallpapers:
-    #         thumbnail = self.oss.fetch_thumbnail(wallpaper["thumbnail"])
-    #         if thumbnail:
-    #             image_data.append({
-    #                 "thumbnail": thumbnail,
-    #                 "text": wallpaper["original"].split("/")[-1],  # 使用 'original'
-    #                 "path": wallpaper["original"],
-    #                 "is_cached": wallpaper.get("is_cached", False)
-    #             })
-    #
-    #     # 使用通用方法布局图片
-    #     self.uiInstance.show_images(
-    #         images=image_data,
-    #         scrollable_frame=self.oss_scrollable_frame,
-    #         canvas=self.oss_canvas,
-    #         on_click=lambda info: self.download_and_set_wallpaper(info["path"])
-    #     )
-
-    # def display_oss_images(self, wallpapers=None):
-    #     """显示 OSS 壁纸"""
-    #     if not self.oss.enabled:
-    #         self.uiInstance.status_var.set(LanguageManager.get_text(self.current_language, "oss_not_configured"))
-    #         return
-    #
-    #     if wallpapers is None:
-    #         try:
-    #             wallpapers = self.oss.list_wallpapers(prefix="wallpapers/")
-    #             for wallpaper in wallpapers:
-    #                 local_file_name = wallpaper["original"].split("/")[-1]
-    #                 local_path = os.path.abspath(f"downloads/{local_file_name}")
-    #                 wallpaper["is_cached"] = os.path.exists(local_path)
-    #         except Exception as e:
-    #             error_message = LanguageManager.get_text(self.current_language, "oss_load_failed", error=str(e))
-    #             self.uiInstance.status_var.set(error_message)
-    #             return
-    #
-    #     # 准备图片数据
-    #     image_data = []
-    #     for wallpaper in wallpapers:
-    #         thumbnail = self.oss.fetch_thumbnail(wallpaper["thumbnail"])
-    #         if thumbnail:
-    #             image_data.append({
-    #                 "thumbnail": thumbnail,
-    #                 "text": wallpaper["original"].split("/")[-1],
-    #                 "path": wallpaper["original"],
-    #                 "is_cached": wallpaper.get("is_cached", False)
-    #             })
-    #
-    #     # 调用 show_images，确保 scrollable_frame 正确
-    #     self.uiInstance.show_images(
-    #         images=image_data,
-    #         scrollable_frame=self.uiInstance.oss_scrollable_frame,
-    #         canvas=self.uiInstance.oss_canvas,
-    #         on_click=lambda info: self.download_and_set_wallpaper(info["path"])
-    #     )
 
     def display_oss_images(self, wallpapers=None):
         """显示 OSS 壁纸"""
@@ -244,27 +139,6 @@ class OSSUIHandler:
             error_message = LanguageManager.get_text(self.current_language.get(), "oss_load_failed", error=str(e))
             self.uiInstance.status_var.set(error_message)
 
-    # def get_pagination_ui(self, parent_frame, update_callback):
-    #     """生成分页按钮并返回容器"""
-    #     pagination_frame = Frame(parent_frame)
-    #
-    #     previous_button = Button(
-    #         pagination_frame, text="Previous",
-    #         command=lambda: self.previous_page_and_update(update_callback)
-    #     )
-    #     previous_button.pack(side="left", padx=5)
-    #
-    #     self.page_label = Label(pagination_frame, text=f"Page {self.current_page + 1}")
-    #     self.page_label.pack(side="left", padx=10)
-    #
-    #     next_button = Button(
-    #         pagination_frame, text="Next",
-    #         command=lambda: self.next_page_and_update(update_callback)
-    #     )
-    #     next_button.pack(side="left", padx=5)
-    #
-    #     return pagination_frame, self.page_label
-
     def get_pagination_ui(self, parent_frame, update_callback):
         """生成分页按钮并返回容器"""
         pagination_frame = Frame(parent_frame)
@@ -296,12 +170,6 @@ class OSSUIHandler:
 
         return pagination_frame, page_label
 
-    # def next_page_and_update(self, update_callback):
-    #     """切换到下一页并更新显示"""
-    #     if self.current_page < self.get_total_pages() - 1:
-    #         self.current_page += 1
-    #         update_callback()
-
     def next_page_and_update(self, update_callback):
         """切换到下一页并更新显示"""
         if self.current_page < self.get_total_pages() - 1:
@@ -317,3 +185,6 @@ class OSSUIHandler:
     def on_canvas_resize(self, event):
         """窗口大小变化时更新布局"""
         self.display_oss_images()
+
+    def update_ui_texts(self, current_language):
+        pass

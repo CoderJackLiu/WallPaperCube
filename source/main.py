@@ -1,8 +1,6 @@
 ### main.py
 from tkinter import Tk, StringVar
 from config_manager import ConfigManager
-from language_manager import LanguageManager
-from wallpaper_manager import WallpaperManager
 from ui_components import AppUI
 
 # Initialize main application
