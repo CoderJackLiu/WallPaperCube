@@ -1,6 +1,7 @@
 ### ui_components.py
+import io
 import json
-from tkinter import Frame, Label, Button, Canvas, filedialog, IntVar, StringVar, ttk
+from tkinter import Frame, Label, Button, Canvas, filedialog, IntVar, StringVar, ttk, Menu
 
 import requests
 
@@ -82,20 +83,33 @@ class AppUI:
         top_frame = Frame(self.root)
         top_frame.pack(fill="x", padx=10, pady=5)
 
+        # 壁纸文件夹和选择文件夹按钮
         self.top_buttons = [
             Label(top_frame, text=LanguageManager.get_text(self.current_language.get(), "wallpaper_folder")),
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "select_folder"),
                    command=self.select_folder),
-            Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "login"),
-                   command=self.github_login),
             Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "settings"),
                    command=self.open_settings)
         ]
-        # 布局按钮
+
+        # 布局静态按钮
         self.top_buttons[0].pack(side="left", padx=5)
         self.top_buttons[1].pack(side="left", padx=5)
         self.top_buttons[2].pack(side="right", padx=5)
-        self.top_buttons[3].pack(side="right", padx=5)
+
+        # 动态的登录按钮或头像按钮
+        self.login_button = Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "login"),
+                                   command=self.github_login)
+        self.avatar_button = Button(top_frame, command=self.show_avatar_menu)
+        self.avatar_menu = Menu(self.root, tearoff=0)
+        self.avatar_menu.add_command(label=LanguageManager.get_text(self.current_language.get(), "logout"),
+                                     command=self.logout)
+
+        # 根据登录状态切换按钮
+        if self.user_info:  # 已登录
+            self.update_to_avatar_button()
+        else:  # 未登录
+            self.update_to_login_button()
 
     def setup_pagination(self):
         """设置底部分页按钮栏"""
@@ -173,6 +187,44 @@ class AppUI:
         self.setup_pagination()
         self.setup_status_bar()
         self.display_images()  # 默认显示本地壁纸
+
+    def update_to_login_button(self):
+        """切换为登录按钮"""
+        self.avatar_button.pack_forget()
+        self.login_button.pack(side="right", padx=5)
+
+    def update_to_avatar_button(self):
+        """切换为头像按钮"""
+        # 如果用户有头像，加载头像图片
+        avatar_url = self.user_info.get("avatar_url")
+        if avatar_url:
+            self.avatar_photo = self.fetch_avatar_image(avatar_url)
+            self.avatar_button.config(image=self.avatar_photo)
+        else:
+            self.avatar_button.config(text="Avatar")
+
+        self.login_button.pack_forget()
+        self.avatar_button.pack(side="right", padx=5)
+
+    def fetch_avatar_image(self, url):
+        """从 URL 获取头像图片"""
+        try:
+            from urllib.request import urlopen
+            from PIL import Image, ImageTk
+            with urlopen(url) as response:
+                avatar_image = Image.open(io.BytesIO(response.read()))
+                avatar_image = avatar_image.resize((40, 40))  # 缩放头像大小
+                return ImageTk.PhotoImage(avatar_image)
+        except Exception as e:
+            print(f"头像加载失败: {e}")
+            return None
+
+    def show_avatar_menu(self):
+        """显示头像菜单"""
+        self.avatar_menu.post(
+            self.avatar_button.winfo_rootx(),
+            self.avatar_button.winfo_rooty() + self.avatar_button.winfo_height()
+        )
 
     def show_images(self, images, scrollable_frame, canvas, on_click):
         """通用图片布局方法"""
@@ -259,6 +311,7 @@ class AppUI:
         if self.user_info:
             self.status_var.set(f"欢迎回来, 用户名: {self.user_info['username']}")
             self.oss_ui_handler.update_uid(self.user_info["id"])
+            self.update_to_avatar_button()  # 切换为头像按钮
             return
 
         self.status_var.set("正在登录，请完成 GitHub 授权...")
@@ -268,10 +321,19 @@ class AppUI:
             self.user_info = user_info
             self.status_var.set(f"登录成功，用户名: {user_info['username']}")
             self.user_info_manager.save_user_info(user_info)
+            self.update_to_avatar_button()  # 切换为头像按钮
             print("用户信息已保存")
             self.oss_ui_handler.update_uid(user_info["id"])
         except Exception as e:
             self.status_var.set(f"登录失败: {e}")
+
+    def logout(self):
+        """退出登录"""
+        self.user_info_manager.clear_user_info()  # 清空本地缓存
+        self.user_info = None
+        self.update_to_login_button()  # 切换为登录按钮
+        self.status_var.set(LanguageManager.get_text(self.current_language.get(), "ready"))
+
 
     def save_user_info(self, user_info):
         """保存用户信息到本地文件"""

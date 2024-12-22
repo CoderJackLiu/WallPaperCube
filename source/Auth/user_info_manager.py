@@ -1,3 +1,4 @@
+import os
 import pickle
 from cryptography.fernet import Fernet
 
@@ -43,3 +44,12 @@ class UserInfoManager:
         except Exception as e:
             print(f"加载用户信息时出错: {e}")
             return None
+
+    def clear_user_info(self):
+        """清空本地用户信息"""
+        try:
+            if os.path.exists(self.USER_INFO_FILE):
+                os.remove(self.USER_INFO_FILE)
+            print("用户信息已清空")
+        except Exception as e:
+            print(f"清空用户信息失败: {e}")
