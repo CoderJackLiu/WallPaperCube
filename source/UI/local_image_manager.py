@@ -52,33 +52,42 @@ class LocalImageManager:
 
     def get_pagination_ui(self, parent_frame, update_callback):
         """生成分页按钮并返回容器"""
-        pagination_frame = Frame(parent_frame)
+        pagination_frame = Frame(parent_frame, padx=5, pady=0)  # 减少分页框的垂直间距
 
-        # 创建上一页按钮
+        # 创建上一页按钮，调整高度和边距
         self.previous_button = Button(
-            pagination_frame, text=LanguageManager.get_text(self.current_language.get(), "previous"),
-            command=lambda: self.previous_page_and_update(update_callback)
+            pagination_frame,
+            text=LanguageManager.get_text(self.current_language.get(), "previous"),
+            command=lambda: self.previous_page_and_update(update_callback),
+            height=1,  # 调整按钮高度
+            padx=5,  # 减少按钮内边距
+            pady=0  # 减少按钮垂直内边距
         )
 
         # 创建页码标签
         self.page_label = Label(
             pagination_frame,
-            text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page + 1)
+            text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page + 1),
+            anchor="center"
         )
 
-        # 创建下一页按钮
+        # 创建下一页按钮，调整高度和边距
         self.next_button = Button(
-            pagination_frame, text=LanguageManager.get_text(self.current_language.get(), "next"),
-            command=lambda: self.next_page_and_update(update_callback)
+            pagination_frame,
+            text=LanguageManager.get_text(self.current_language.get(), "next"),
+            command=lambda: self.next_page_and_update(update_callback),
+            height=1,  # 调整按钮高度
+            padx=5,  # 减少按钮内边距
+            pady=0  # 减少按钮垂直内边距
         )
 
-        # 布局按钮和页码标签
-        self.previous_button.grid(row=0, column=0, padx=10)
-        self.page_label.grid(row=0, column=1, padx=0)
-        self.next_button.grid(row=0, column=2, padx=10)
+        # 布局按钮和页码标签，紧凑排列
+        self.previous_button.grid(row=0, column=0, padx=5, pady=0)
+        self.page_label.grid(row=0, column=1, padx=5, pady=0)
+        self.next_button.grid(row=0, column=2, padx=5, pady=0)
 
         # 在父容器中居中显示分页框
-        pagination_frame.pack(anchor="center", pady=10)
+        pagination_frame.pack(anchor="center", pady=0)  # 减少分页框的垂直间距
 
         # 返回分页框和页码标签
         return pagination_frame, self.page_label
@@ -103,7 +112,7 @@ class LocalImageManager:
             )
             update_callback()
 
-    def update_ui_texts(self,current_language):
+    def update_ui_texts(self, current_language):
         self.current_language = current_language
         self.page_label.config(
             text=LanguageManager.get_text(self.current_language.get(), "page", page=self.current_page + 1)

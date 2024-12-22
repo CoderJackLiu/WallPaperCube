@@ -3,8 +3,6 @@ import io
 import json
 from tkinter import Frame, Label, Button, Canvas, filedialog, IntVar, StringVar, ttk, Menu
 
-import requests
-
 from language_manager import LanguageManager
 from wallpaper_manager import WallpaperManager
 from config_manager import ConfigManager
@@ -16,9 +14,6 @@ from auto_switcher import AutoSwitcher
 from UI.oss_ui import OSSUIHandler
 from UI.local_image_manager import LocalImageManager
 from Auth.github_auth import GitHubAuth
-
-import pickle
-from cryptography.fernet import Fernet
 
 from Auth.user_info_manager import UserInfoManager
 
@@ -138,7 +133,7 @@ class AppUI:
         self.oss_ui_handler.oss_scrollable_frame = self.oss_scrollable_frame
         # 添加分页按钮，与本地壁纸布局一致
         pagination_frame = Frame(self.oss_tab)
-        pagination_frame.pack(fill="x", pady=10)
+        pagination_frame.pack(fill="x", pady=2)
         self.oss_pagination_ui, self.oss_page_label = self.oss_ui_handler.get_pagination_ui(
             pagination_frame, update_callback=self.oss_ui_handler.display_oss_images
         )
@@ -158,7 +153,7 @@ class AppUI:
 
         # 添加分页按钮
         pagination_frame = Frame(self.local_tab)
-        pagination_frame.pack(fill="x", pady=10)
+        pagination_frame.pack(fill="x", pady=2)
         self.pagination_ui, self.local_page_label = self.local_image_manager.get_pagination_ui(
             pagination_frame, update_callback=self.display_local_images
         )
@@ -227,7 +222,7 @@ class AppUI:
         )
 
     def show_images(self, images, scrollable_frame, canvas, on_click):
-        """通用图片布局方法"""
+        """通用图片布局方法，支持固定大小缩略图和分离的文字描述"""
         if scrollable_frame is None:
             raise ValueError("scrollable_frame is None. Ensure it is properly initialized before calling show_images.")
 
@@ -235,12 +230,16 @@ class AppUI:
         for widget in scrollable_frame.winfo_children():
             widget.destroy()
 
+        # 固定展示框的宽高（120x90，保持16:12）
+        frame_width = 115
+        frame_height = 70
+
         # 计算列数
         canvas_width = canvas.winfo_width()
         if canvas_width <= 0:  # 默认列数
-            columns = 5
+            columns = 6
         else:
-            columns = max(canvas_width // 120, 1)  # 每张图片约 120px
+            columns = max(canvas_width // (frame_width + 10), 1)  # 加10px作为边距
 
         # 布局图片
         for index, image_info in enumerate(images):
@@ -248,16 +247,34 @@ class AppUI:
             if not thumbnail:
                 continue
 
-            img_label = Label(
-                scrollable_frame,
-                image=thumbnail,
-                text=image_info.get("text", ""),
-                compound="top",
-                bg="white"
-            )
+            # 创建统一大小的外框
+            container = Frame(scrollable_frame, width=frame_width, height=frame_height + 20, bg="white")
+            container.grid_propagate(False)  # 固定框大小
+            container.grid(row=index // columns, column=index % columns, padx=5, pady=5)
+
+            # 缩略图部分
+            img_label = Label(container, bg="white")
+            img_label.place(x=0, y=0, width=frame_width, height=frame_height)  # 固定缩略图显示区域
+            img_label.bind("<Button-1>", lambda event, info=image_info: on_click(info))  # 点击事件
             img_label.photo = thumbnail  # 防止垃圾回收
-            img_label.grid(row=index // columns, column=index % columns, padx=10, pady=10)
-            img_label.bind("<Button-1>", lambda event, info=image_info: on_click(info))
+
+            # 保持比例显示缩略图
+            img_width, img_height = thumbnail.width(), thumbnail.height()
+            scale = min(frame_width / img_width, frame_height / img_height)
+            scaled_width = int(img_width * scale)
+            scaled_height = int(img_height * scale)
+            img_label.config(image=thumbnail)  # 使用缩放后的图片
+
+            # 文件描述部分
+            description_label = Label(
+                container,
+                text=image_info.get("text", ""),
+                bg="white",
+                anchor="n",
+                wraplength=frame_width
+            )
+            description_label.place(x=0, y=frame_height, width=frame_width, height=20)  # 放在图片下方
+
             # 如果壁纸已缓存，调用 _add_cached_mark 动态添加标记
             if image_info.get("is_cached", False):
                 print(f"Adding cached mark for: {image_info['text']}")

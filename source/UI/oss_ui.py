@@ -146,7 +146,7 @@ class OSSUIHandler:
 
     def get_pagination_ui(self, parent_frame, update_callback):
         """生成分页按钮并返回容器"""
-        pagination_frame = Frame(parent_frame)
+        pagination_frame = Frame(parent_frame, padx=5, pady=0)
 
         # 创建上一页按钮
         self.previous_button = Button(
@@ -167,12 +167,12 @@ class OSSUIHandler:
         )
 
         # 使用 grid 布局居中
-        self.previous_button.grid(row=0, column=0, padx=10)
-        self.page_label.grid(row=0, column=1, padx=0)
-        self.next_button.grid(row=0, column=2, padx=10)
+        self.previous_button.grid(row=0, column=0, padx=10, pady=0)
+        self.page_label.grid(row=0, column=1, padx=0, pady=0)
+        self.next_button.grid(row=0, column=2, padx=10, pady=0)
 
         # 在父容器中居中显示分页框
-        pagination_frame.pack(anchor="center", pady=10)
+        pagination_frame.pack(anchor="center", pady=0)
 
         return pagination_frame, self.page_label
 
