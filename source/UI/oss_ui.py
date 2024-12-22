@@ -208,4 +208,4 @@ class OSSUIHandler:
 
     def update_uid(self, param):
         self.uid = param
-        self.display_oss_images()
+        # self.display_oss_images()

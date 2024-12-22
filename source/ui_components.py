@@ -1,7 +1,5 @@
 ### ui_components.py
-import binascii
 import json
-import webbrowser
 from tkinter import Frame, Label, Button, Canvas, filedialog, IntVar, StringVar, ttk
 
 import requests
@@ -17,6 +15,12 @@ from auto_switcher import AutoSwitcher
 from UI.oss_ui import OSSUIHandler
 from UI.local_image_manager import LocalImageManager
 from Auth.github_auth import GitHubAuth
+
+import pickle
+from cryptography.fernet import Fernet
+
+from Auth.user_info_manager import UserInfoManager
+
 class AppUI:
     def __init__(self, root, config, current_language):
         self.oss_page_label = None
@@ -44,6 +48,8 @@ class AppUI:
         )
         auto_switch_enabled = self.config.get("auto_switch_enabled", 0)
         auto_switch_interval = self.config.get("auto_switch_interval", 5)
+        self.user_info_manager = UserInfoManager()
+        self.user_info = self.user_info_manager.load_user_info()  # 加载用户信息
 
         if auto_switch_enabled and auto_switch_interval >= 5:
             self.auto_switcher.start_auto_switch(auto_switch_interval)
@@ -65,6 +71,11 @@ class AppUI:
         #     print("OSS is not configured or disabled. Skipping OSS features.")
         self.local_image_manager = LocalImageManager(current_language,images_per_page=24)
         self.setup_ui()
+        if self.user_info:
+            print(f"已加载用户信息: {self.user_info}")
+            self.oss_ui_handler.update_uid(self.user_info["id"])
+        else:
+            print("未检测到用户信息")
 
     def setup_top_frame(self):
         """设置顶部按钮栏"""
@@ -212,10 +223,6 @@ class AppUI:
             on_click=lambda info: self.set_wallpaper(info["path"])
         )
 
-    def display_oss_images(self):
-        """显示 OSS 壁纸"""
-        self.oss_ui_handler.display_oss_images()
-
     def display_images(self):
         """根据激活的 Tab 显示壁纸"""
         current_tab = self.notebook.index(self.notebook.select())
@@ -249,14 +256,19 @@ class AppUI:
 
     def github_login(self):
         """触发 GitHub 登录流程"""
+        if self.user_info:
+            self.status_var.set(f"欢迎回来, 用户名: {self.user_info['username']}")
+            self.oss_ui_handler.update_uid(self.user_info["id"])
+            return
+
         self.status_var.set("正在登录，请完成 GitHub 授权...")
 
         try:
             user_info = self.github_auth.login()
             self.user_info = user_info
             self.status_var.set(f"登录成功，用户名: {user_info['username']}")
-            self.save_user_info(user_info)
-            # self.load_wallpapers(user_info["id"])
+            self.user_info_manager.save_user_info(user_info)
+            print("用户信息已保存")
             self.oss_ui_handler.update_uid(user_info["id"])
         except Exception as e:
             self.status_var.set(f"登录失败: {e}")

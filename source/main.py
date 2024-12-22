@@ -2,6 +2,7 @@
 from tkinter import Tk, StringVar
 from config_manager import ConfigManager
 from ui_components import AppUI
+from Auth.user_info_manager import UserInfoManager
 
 # Initialize main application
 def main():
@@ -15,6 +16,14 @@ def main():
     x_position = (screen_width // 2) - (800 // 2)
     y_position = (screen_height // 2) - (600 // 2)
     root.geometry(f"800x600+{x_position}+{y_position}")
+
+    user_info_manager = UserInfoManager()
+    user_info = user_info_manager.load_user_info()  # 在主程序中加载用户信息
+
+    if user_info:
+        print(f"已加载用户信息: {user_info}")
+    else:
+        print("未检测到用户信息")
 
     config = ConfigManager.load_config()
     current_language = StringVar(root, value=config.get("language", "English"))
