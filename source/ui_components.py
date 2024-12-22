@@ -194,26 +194,26 @@ class AppUI:
         self.login_button.pack(side="right", padx=5)
 
     def update_to_avatar_button(self):
-        """切换为头像按钮"""
+        """切换为头像按钮，并设置固定大小为 20x20"""
         # 如果用户有头像，加载头像图片
         avatar_url = self.user_info.get("avatar_url")
         if avatar_url:
             self.avatar_photo = self.fetch_avatar_image(avatar_url)
-            self.avatar_button.config(image=self.avatar_photo)
+            self.avatar_button.config(image=self.avatar_photo, width=20, height=20)  # 固定按钮大小为 20x20
         else:
-            self.avatar_button.config(text="Avatar")
+            self.avatar_button.config(text="Avatar", width=5, height=1)  # 无头像时显示文本
 
         self.login_button.pack_forget()
         self.avatar_button.pack(side="right", padx=5)
 
     def fetch_avatar_image(self, url):
-        """从 URL 获取头像图片"""
+        """从 URL 获取头像图片并调整大小为 20x20"""
         try:
             from urllib.request import urlopen
             from PIL import Image, ImageTk
             with urlopen(url) as response:
                 avatar_image = Image.open(io.BytesIO(response.read()))
-                avatar_image = avatar_image.resize((40, 40))  # 缩放头像大小
+                avatar_image = avatar_image.resize((20, 20))  # 缩放头像大小为 20x20
                 return ImageTk.PhotoImage(avatar_image)
         except Exception as e:
             print(f"头像加载失败: {e}")
@@ -355,6 +355,13 @@ class AppUI:
         self.local_image_manager.update_ui_texts(self.current_language)
         self.oss_ui_handler.update_ui_texts(self.current_language)
 
+        # 更新登录按钮文本
+        if self.login_button.winfo_ismapped():  # 如果登录按钮当前可见
+            self.login_button.config(text=LanguageManager.get_text(self.current_language.get(), "login"))
+
+        # 更新头像菜单文本
+        if self.avatar_menu:
+            self.avatar_menu.entryconfig(0, label=LanguageManager.get_text(self.current_language.get(), "logout"))
 
         # 更新 Tab 标签
         self.notebook.tab(0, text=LanguageManager.get_text(self.current_language.get(), "local_wallpapers"))

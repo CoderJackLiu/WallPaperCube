@@ -26,6 +26,7 @@ class LanguageManager:
             "oss_not_configured": "OSS is not configured or disabled.",
             "oss_load_failed": "Failed to load OSS images: {error}",
             "login": "Login",
+            "logout": "Logout",
         },
         "Chinese": {
             "select_folder": "选择文件夹",
@@ -53,6 +54,7 @@ class LanguageManager:
             "oss_not_configured": "OSS 未配置或已禁用。",
             "oss_load_failed": "加载 OSS 壁纸失败：{error}",
             "login": "登录",
+            "logout": "退出登录",
         },
     }
 
