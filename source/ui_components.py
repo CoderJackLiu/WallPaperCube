@@ -16,6 +16,8 @@ from UI.local_image_manager import LocalImageManager
 from Auth.github_auth import GitHubAuth
 
 from Auth.user_info_manager import UserInfoManager
+from Auth.auth_manager import AuthManager
+
 
 class AppUI:
     def __init__(self, root, config, current_language):
@@ -65,7 +67,12 @@ class AppUI:
         # # 如果 OSS 配置不完整，提示但不影响程序启动
         # if not self.oss.enabled:
         #     print("OSS is not configured or disabled. Skipping OSS features.")
-        self.local_image_manager = LocalImageManager(current_language,images_per_page=24)
+        self.local_image_manager = LocalImageManager(current_language, images_per_page=24)
+
+        # 初始化用户信息管理和 AuthManager
+        self.user_info_manager = UserInfoManager()
+        self.auth_manager = AuthManager(self.root, self.status_var, self.user_info_manager, self)
+
         self.setup_ui()
         if self.user_info:
             print(f"已加载用户信息: {self.user_info}")
@@ -94,7 +101,8 @@ class AppUI:
 
         # 动态的登录按钮或头像按钮
         self.login_button = Button(top_frame, text=LanguageManager.get_text(self.current_language.get(), "login"),
-                                   command=self.github_login)
+                                   command=self.auth_manager.open_login_window)
+
         self.avatar_button = Button(top_frame, command=self.show_avatar_menu)
         self.avatar_menu = Menu(self.root, tearoff=0)
         self.avatar_menu.add_command(label=LanguageManager.get_text(self.current_language.get(), "logout"),
@@ -105,6 +113,54 @@ class AppUI:
             self.update_to_avatar_button()
         else:  # 未登录
             self.update_to_login_button()
+
+    def update_to_login_button(self):
+        """切换为登录按钮"""
+        self.avatar_button.pack_forget()  # 隐藏头像按钮
+        self.login_button.pack(side="right", padx=5)  # 显示登录按钮
+
+    def update_to_avatar_button(self):
+        """切换为头像按钮"""
+        self.login_button.pack_forget()  # 隐藏登录按钮
+
+        avatar_url = self.user_info_manager.get_avatar_url()  # 检查用户信息中的头像 URL
+        if avatar_url:
+            from urllib.request import urlopen
+            from PIL import Image, ImageTk
+            try:
+                # 下载头像并调整大小
+                with urlopen(avatar_url) as response:
+                    avatar_image = Image.open(response)
+                    avatar_image = avatar_image.resize((30, 30))  # 调整头像大小
+                    self.avatar_photo = ImageTk.PhotoImage(avatar_image)
+                    self.avatar_button.config(image=self.avatar_photo, text="", width=20, height=20)
+            except Exception as e:
+                print(f"头像加载失败: {e}")
+                self.avatar_button.config(text="Avatar", bg="white", width=5, height=1)  # 默认按钮
+        else:
+            self.avatar_button.config(text="Avatar", bg="white", width=5, height=1)  # 没有头像时显示默认按钮
+
+        self.avatar_button.pack(side="right", padx=5)
+
+    # def update_to_avatar_button(self):
+    #     """切换为头像按钮，并设置固定大小为 20x20"""
+    #     # 如果用户有头像，加载头像图片
+    #     avatar_url = self.user_info.get("avatar_url")
+    #     if avatar_url:
+    #         self.avatar_photo = self.fetch_avatar_image(avatar_url)
+    #         self.avatar_button.config(image=self.avatar_photo, width=20, height=20)  # 固定按钮大小为 20x20
+    #     else:
+    #         self.avatar_button.config(text="Avatar", width=5, height=1)  # 无头像时显示文本
+    #
+    #     self.login_button.pack_forget()
+    #     self.avatar_button.pack(side="right", padx=5)
+
+    def show_avatar_menu(self):
+        """显示头像菜单"""
+        self.avatar_menu.post(
+            self.avatar_button.winfo_rootx(),
+            self.avatar_button.winfo_rooty() + self.avatar_button.winfo_height()
+        )
 
     def setup_pagination(self):
         """设置底部分页按钮栏"""
@@ -165,7 +221,8 @@ class AppUI:
 
         # 本地文件夹 Tab
         self.local_tab = Frame(self.notebook)
-        self.notebook.add(self.local_tab, text=LanguageManager.get_text(self.current_language.get(), "local_wallpapers"))
+        self.notebook.add(self.local_tab,
+                          text=LanguageManager.get_text(self.current_language.get(), "local_wallpapers"))
 
         # OSS 文件夹 Tab
         self.oss_tab = Frame(self.notebook)
@@ -188,18 +245,6 @@ class AppUI:
         self.avatar_button.pack_forget()
         self.login_button.pack(side="right", padx=5)
 
-    def update_to_avatar_button(self):
-        """切换为头像按钮，并设置固定大小为 20x20"""
-        # 如果用户有头像，加载头像图片
-        avatar_url = self.user_info.get("avatar_url")
-        if avatar_url:
-            self.avatar_photo = self.fetch_avatar_image(avatar_url)
-            self.avatar_button.config(image=self.avatar_photo, width=20, height=20)  # 固定按钮大小为 20x20
-        else:
-            self.avatar_button.config(text="Avatar", width=5, height=1)  # 无头像时显示文本
-
-        self.login_button.pack_forget()
-        self.avatar_button.pack(side="right", padx=5)
 
     def fetch_avatar_image(self, url):
         """从 URL 获取头像图片并调整大小为 20x20"""
@@ -337,7 +382,7 @@ class AppUI:
             user_info = self.github_auth.login()
             self.user_info = user_info
             self.status_var.set(f"登录成功，用户名: {user_info['username']}")
-            self.user_info_manager.save_user_info(user_info)
+            self.user_info_manager.save_user_info(user_info["email"], user_info["id"])
             self.update_to_avatar_button()  # 切换为头像按钮
             print("用户信息已保存")
             self.oss_ui_handler.update_uid(user_info["id"])
@@ -350,14 +395,6 @@ class AppUI:
         self.user_info = None
         self.update_to_login_button()  # 切换为登录按钮
         self.status_var.set(LanguageManager.get_text(self.current_language.get(), "ready"))
-
-
-    def save_user_info(self, user_info):
-        """保存用户信息到本地文件"""
-        with open("user_info.json", "w") as file:
-            json.dump(user_info, file)
-
-        print("用户信息已保存到本地")
 
     def update_ui_texts(self):
         # 更新状态栏
@@ -388,7 +425,3 @@ class AppUI:
         """窗口大小变化时更新布局"""
         self.display_local_images()
 
-    def save_user_id(self, user_id):
-        """保存用户 ID 到本地"""
-        with open("user_id.txt", "w") as file:
-            file.write(str(user_id))
